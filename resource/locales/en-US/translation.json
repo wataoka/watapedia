@@ -680,6 +680,7 @@
 
   "user_management": {
     "target_user": "Target User",
+    "new_password": "New Password",
     "invite_users": "Invite New Users",
     "emails": "Emails",
     "invite_thru_email": "Send Invitation Email",
@@ -699,6 +700,7 @@
     "unset": "No",
     "temporary_password": "The created user has a temporary password",
     "send_temporary_password": "Be sure to copy the temporary password ON THIS SCREEN and send it to the user.",
+    "password_reset_message": "Let the user know the new password below and strongly recommend to change another one immediately.",
     "send_new_password": "Please send the new password to the user.",
     "password_never_seen": "The temporary password can never be retrieved after this screen is closed.",
     "reset_password": "Reset Password",
@@ -719,8 +721,7 @@
     "group_example": "e.g. : Group1",
     "created_group": "Group was created",
     "add_user": "Add a User to the Created Group",
-    "deny_create_group": "You can't create a new group.",
-    "is_loading_data": "Loading data...",
+    "deny_create_group": "You can't create a new group with the current settings",
     "choose_action": "Choose an action for private pages",
     "delete_group": "Delete Group",
     "group_name": "Group Name",
@@ -737,7 +738,8 @@
   },
 
   "importer_management": {
-    "import_from": "Import from %s",
+    "import_from_esa": "Import from esa.io",
+    "import_from_qiita": "import_from Qiita:Team",
     "esa_settings": {
       "team_name": "Team name",
       "access_token": "Access token",
@@ -752,8 +754,18 @@
     "page_skip": "Pages with a name that already exists on GROWI are not imported",
     "Directory_hierarchy_tag": "Directory Hierarchy Tag"
   },
+<<<<<<< HEAD
   "full_text_search_management":{
     "index_build": "Index Build",
     "explain":"Force rebuild index.<br>Click 'Build' to delete and create mapping file and add all pages.<br>This may take a while."
+=======
+
+  "full_text_search_management":{
+    "elasticsearch_management":"Elasticsearch Management",
+    "build_button":"Rebuild Index",
+    "rebuild_description_1":"Force rebuild index.",
+    "rebuild_description_2":"Click 'Build Now' to delete and create mapping file and add all pages.",
+    "rebuild_description_3":"This may take a while."
+>>>>>>> 20f4df18730be4e732c2da74eea2654e9856a9a5
   }
 }

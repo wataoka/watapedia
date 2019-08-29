@@ -663,6 +663,7 @@
 
   "user_management": {
     "target_user": "対象ユーザー",
+    "new_password": "新しいパスワード",
     "invite_users": "新規ユーザーの招待",
     "emails": "メールアドレス (複数行入力で複数人招待可能)",
     "invite_thru_email": "招待をメールで送信",
@@ -682,6 +683,7 @@
     "unset": "未設定",
     "temporary_password": "作成したユーザーは仮パスワードが設定されています。",
     "send_temporary_password": "招待メールを送っていない場合、この画面で必ず仮パスワードをコピーし、招待者へ連絡してください。",
+    "password_reset_message": "対象ユーザーに下記のパスワードを伝え、すぐに新しく別のパスワードを設定するよう伝えてください。",
     "send_new_password": "新規発行したパスワードを、対象ユーザーへ連絡してください。",
     "password_never_seen": "表示されたパスワードはこの画面を閉じると二度と表示できませんのでご注意ください。",
     "reset_password": "パスワードの再発行",
@@ -720,7 +722,8 @@
   },
 
   "importer_management": {
-    "import_from": "%s からインポート",
+    "import_from_esa": "esa.ioからインポート",
+    "import_from_qiita": "Qiita:Teamからインポート",
     "esa_settings": {
       "team_name": "チーム名",
       "access_token": "アクセストークン",
@@ -735,8 +738,18 @@
     "page_skip": "既に GROWI 側に同名のページが存在する場合、そのページはスキップされます",
     "Directory_hierarchy_tag": "ディレクトリ階層タグ"
   },
+<<<<<<< HEAD
   "full_text_search_management":{
     "index_build": "索引作成",
     "explain":"索引を作成します。<br>「作成」 ボタンを押すと全てのページが再構築されます。<br>この処理には時間がかかります。"
+=======
+
+  "full_text_search_management":{
+    "elasticsearch_management":"Elasticsearch 管理",
+    "build_button":"インデックスのリビルド",
+    "rebuild_description_1":"Build Now ボタンを押すと全てのページのインデックスを削除し、作り直します。",
+    "rebuild_description_2":"この作業には数秒かかります。",
+    "rebuild_description_3":""
+>>>>>>> 20f4df18730be4e732c2da74eea2654e9856a9a5
   }
 }

@@ -14,6 +14,7 @@ const sep = path.sep;
 const mongoose = require('mongoose');
 
 const models = require('../models');
+const initMiddlewares = require('../middlewares');
 
 const PluginService = require('../plugins/plugin.service');
 
@@ -53,6 +54,7 @@ function Crowi(rootdir) {
   this.tokens = null;
 
   this.models = {};
+  this.middlewares = {};
 
   this.env = process.env;
   this.node_env = this.env.NODE_ENV || 'development';
@@ -79,6 +81,7 @@ function getMongoUrl(env) {
 Crowi.prototype.init = async function() {
   await this.setupDatabase();
   await this.setupModels();
+  await this.setupMiddlewares();
   await this.setupSessionConfig();
   await this.setupConfigManager();
 
@@ -237,6 +240,11 @@ Crowi.prototype.setupModels = async function() {
   Object.keys(models).forEach((key) => {
     return this.model(key, models[key](this));
   });
+};
+
+Crowi.prototype.setupMiddlewares = async function() {
+  // const self = this;
+  this.middlewares = await initMiddlewares(this);
 };
 
 Crowi.prototype.getIo = function() {

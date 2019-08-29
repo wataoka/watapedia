@@ -656,7 +656,12 @@ module.exports = function(crowi, app) {
           return new Promise((resolve, reject) => {
             UserGroupRelation.findAllRelationForUserGroup(userGroup)
               .then((relations) => {
-                return resolve([userGroup, relations]);
+                return resolve({
+                  id: userGroup._id,
+                  relatedUsers: relations.map((relation) => {
+                    return relation.relatedUser;
+                  }),
+                });
               });
           });
         });
@@ -665,7 +670,9 @@ module.exports = function(crowi, app) {
         return Promise.all(allRelationsPromise);
       })
       .then((relations) => {
-        renderVar.userGroupRelations = new Map(relations);
+        for (const relation of relations) {
+          renderVar.userGroupRelations[relation.id] = relation.relatedUsers;
+        }
         debug('in findUserGroupsWithPagination findAllRelationForUserGroupResult', renderVar.userGroupRelations);
         return res.render('admin/user-groups', renderVar);
       })
@@ -709,29 +716,6 @@ module.exports = function(crowi, app) {
     return res.render('admin/user-group-detail', renderVar);
   };
 
-  // グループの生成
-  actions.userGroup.create = function(req, res) {
-    const form = req.form.createGroupForm;
-    if (req.form.isValid) {
-      const userGroupName = crowi.xss.process(form.userGroupName);
-
-      UserGroup.createGroupByName(userGroupName)
-        .then((newUserGroup) => {
-          req.flash('successMessage', newUserGroup.name);
-          req.flash('createdUserGroup', newUserGroup);
-          return res.redirect('/admin/user-groups');
-        })
-        .catch((err) => {
-          debug('create userGroup error:', err);
-          req.flash('errorMessage', '同じグループ名が既に存在します。');
-        });
-    }
-    else {
-      req.flash('errorMessage', req.form.errors.join('\n'));
-      return res.redirect('/admin/user-groups');
-    }
-  };
-
   //
   actions.userGroup.update = function(req, res) {
     const userGroupId = req.params.userGroupId;
@@ -765,23 +749,6 @@ module.exports = function(crowi, app) {
       .then(() => {
         return res.redirect(`/admin/user-group-detail/${userGroupId}`);
       });
-  };
-
-
-  // app.post('/_api/admin/user-group/delete' , admin.userGroup.removeCompletely);
-  actions.userGroup.removeCompletely = async(req, res) => {
-    const { deleteGroupId, actionName, selectedGroupId } = req.body;
-
-    try {
-      await UserGroup.removeCompletelyById(deleteGroupId, actionName, selectedGroupId);
-      req.flash('successMessage', '削除しました');
-    }
-    catch (err) {
-      debug('Error while removing userGroup.', err, deleteGroupId);
-      req.flash('errorMessage', '完全な削除に失敗しました。');
-    }
-
-    return res.redirect('/admin/user-groups');
   };
 
   actions.userGroupRelation = {};
@@ -1230,11 +1197,7 @@ module.exports = function(crowi, app) {
    * @param {*} res
    */
   actions.api.importerSettingEsa = async(req, res) => {
-    const form = req.form.settingForm;
-
-    if (!req.form.isValid) {
-      return res.json({ status: false, message: req.form.errors.join('\n') });
-    }
+    const form = req.body;
 
     await configManager.updateConfigsInTheSameNamespace('crowi', form);
     importer.initializeEsaClient(); // let it run in the back aftert res
@@ -1380,17 +1343,6 @@ module.exports = function(crowi, app) {
       });
 
     return res.json(ApiResponse.success());
-  };
-
-  actions.api.userGroups = async(req, res) => {
-    try {
-      const userGroups = await UserGroup.find();
-      return res.json(ApiResponse.success({ userGroups }));
-    }
-    catch (err) {
-      logger.error('Error', err);
-      return res.json(ApiResponse.error('Error'));
-    }
   };
 
   function validateMailSetting(req, form, callback) {

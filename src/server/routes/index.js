@@ -4,7 +4,7 @@ const autoReap = require('multer-autoreap');
 autoReap.options.reapOnError = true; // continue reaping the file even if an error occurs
 
 module.exports = function(crowi, app) {
-  const middlewares = require('../util/middlewares')(crowi, app);
+  const middlewares = require('../util/middlewares')(crowi);
   const uploads = multer({ dest: `${crowi.tmpDir}uploads` });
   const form = require('../form');
   const page = require('./page')(crowi, app);
@@ -143,12 +143,9 @@ module.exports = function(crowi, app) {
   app.post('/admin/users/external-accounts/:id/remove'   , loginRequired() , adminRequired , admin.externalAccount.remove);
 
   // user-groups admin
-  app.get('/admin/user-groups'             , loginRequired(), adminRequired, admin.userGroup.index);
+  app.get('/admin/user-groups'                    , loginRequired(), adminRequired, admin.userGroup.index);
   app.get('/admin/user-group-detail/:id'          , loginRequired(), adminRequired, admin.userGroup.detail);
-  app.post('/admin/user-group/create'      , form.admin.userGroupCreate, loginRequired(), adminRequired, csrf, admin.userGroup.create);
   app.post('/admin/user-group/:userGroupId/update', loginRequired(), adminRequired, csrf, admin.userGroup.update);
-  app.post('/admin/user-group.remove' , loginRequired(), adminRequired, csrf, admin.userGroup.removeCompletely);
-  app.get('/_api/admin/user-groups', loginRequired(), adminRequired, admin.api.userGroups);
 
   // user-group-relations admin
   app.post('/admin/user-group-relation/create', loginRequired(), adminRequired, csrf, admin.userGroupRelation.create);

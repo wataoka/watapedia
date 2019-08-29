@@ -37,7 +37,10 @@ import CustomCssEditor from './components/Admin/CustomCssEditor';
 import CustomScriptEditor from './components/Admin/CustomScriptEditor';
 import CustomHeaderEditor from './components/Admin/CustomHeaderEditor';
 import AdminRebuildSearch from './components/Admin/AdminRebuildSearch';
-import GroupDeleteModal from './components/GroupDeleteModal/GroupDeleteModal';
+import UserPage from './components/Admin/Users/Users';
+import UserGroupPage from './components/Admin/UserGroup/UserGroupPage';
+import Importer from './components/Admin/Importer';
+import FullTextSearchManagement from './components/Admin/FullTextSearchManagement/FullTextSearchPage';
 
 import AppContainer from './services/AppContainer';
 import PageContainer from './services/PageContainer';
@@ -97,7 +100,11 @@ let componentMappings = {
   'user-created-list': <RecentCreated />,
   'user-draft-list': <MyDraftList />,
 
+  'admin-user-page': <UserPage />,
+  'admin-full-text-search-management': <FullTextSearchManagement />,
+
   'staff-credit': <StaffCredit />,
+  'admin-importer': <Importer />,
 };
 
 // additional definitions if data exists
@@ -173,15 +180,21 @@ if (customHeaderEditorElem != null) {
     customHeaderEditorElem,
   );
 }
-const adminGrantSelectorElem = document.getElementById('admin-delete-user-group-modal');
-if (adminGrantSelectorElem != null) {
+
+const adminUserGroupPageElem = document.getElementById('admin-user-group-page');
+if (adminUserGroupPageElem != null) {
+  const isAclEnabled = adminUserGroupPageElem.getAttribute('data-isAclEnabled') === 'true';
+
   ReactDOM.render(
-    <I18nextProvider i18n={i18n}>
-      <GroupDeleteModal
-        crowi={appContainer}
-      />
-    </I18nextProvider>,
-    adminGrantSelectorElem,
+    <Provider inject={[]}>
+      <I18nextProvider i18n={i18n}>
+        <UserGroupPage
+          crowi={appContainer}
+          isAclEnabled={isAclEnabled}
+        />
+      </I18nextProvider>
+    </Provider>,
+    adminUserGroupPageElem,
   );
 }
 
