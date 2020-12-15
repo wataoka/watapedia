@@ -8,12 +8,11 @@
 require('module-alias/register');
 
 function getMongoUri(env) {
-  return 'mongodb+srv://@cluster0.osf1b.mongodb.net/heroku_s632g709?retryWrites=true&w=majority'
-  //return env.MONGOLAB_URI // for B.C.
-  //   || env.MONGODB_URI // MONGOLAB changes their env name
-  //   || env.MONGOHQ_URL
-  //   || env.MONGO_URI
-  //   || ((env.NODE_ENV === 'test') ? 'mongodb://localhost/growi_test' : 'mongodb://localhost/growi');
+  return env.MONGOLAB_URI // for B.C.
+     || env.MONGODB_URI // MONGOLAB changes their env name
+     || env.MONGOHQ_URL
+     || env.MONGO_URI
+     || ((env.NODE_ENV === 'test') ? 'mongodb://localhost/growi_test' : 'mongodb://localhost/growi');
 }
 
 const mongoUri = getMongoUri(process.env);

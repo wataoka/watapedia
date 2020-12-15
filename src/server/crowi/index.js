@@ -192,12 +192,7 @@ Crowi.prototype.setupDatabase = function() {
 
   const mongoUri = getMongoUrl(this.env);
 
-  return mongoose.connect(mongoUri, {
-      useNewUrlParser: true,
-      user: this.env.MONGO_USER,
-      pass: this.env.MONGO_PASSWORD,
-      useUnifiedTopology: true
-  });
+  return mongoose.connect(mongoUri, { useNewUrlParser: true });
 };
 
 Crowi.prototype.setupSessionConfig = function() {
