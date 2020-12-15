@@ -7,7 +7,13 @@ mongoose.Promise = global.Promise;
 jest.setTimeout(30000); // default 5000
 
 beforeAll(async(done) => {
-  await mongoose.connect(mongoUri, { useNewUrlParser: true });
+  // await mongoose.connect(mongoUri, { useNewUrlParser: true });
+  await mongoose.connect(mongoUri, {
+      useNewUrlParser: true,
+      user: process.env.MONGO_USER,
+      pass: process.env.MONGO_PASSWORD,
+      useUnifiedTopology: true
+  });
   await mongoose.connection.dropDatabase();
   done();
 });
