@@ -31,12 +31,3 @@ module.exports = {
   migrationsDir: 'src/migrations/',
   changelogCollectionName: 'migrations',
 };
-
-const MongoClient = require('mongodb').MongoClient;
-const uri = "mongodb+srv://heroku_s632g709:Onethe9ryu@cluster0.osf1b.mongodb.net/<dbname>?retryWrites=true&w=majority";
-const client = new MongoClient(uri, { useNewUrlParser: true });
-client.connect(err => {
-  const collection = client.db("test").collection("devices");
-  // perform actions on the collection object
-  client.close();
-});
