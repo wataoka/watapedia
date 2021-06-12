@@ -14,8 +14,12 @@ module.exports = {
   'growi:models:external-account': 'debug',
   // 'growi:routes:login': 'debug',
   'growi:routes:login-passport': 'debug',
+  'growi:middleware:safe-redirect': 'debug',
   'growi:service:PassportService': 'debug',
+  'growi:service:s2s-messaging:*': 'debug',
+  // 'growi:service:socket-io': 'debug',
   // 'growi:service:ConfigManager': 'debug',
+  // 'growi:service:mail': 'debug',
   'growi:lib:search': 'debug',
   // 'growi:service:GlobalNotification': 'debug',
   // 'growi:lib:importer': 'debug',
@@ -23,13 +27,13 @@ module.exports = {
   'growi-plugin:*': 'debug',
   // 'growi:InterceptorManager': 'debug',
 
-  // email
-  // 'growi:lib:mailer': 'debug',
-
   /*
    * configure level for client
    */
-  'growi:app': 'debug',
+  'growi:cli:bootstrap': 'debug',
+  'growi:cli:app': 'debug',
   'growi:services:*': 'debug',
   // 'growi:StaffCredit': 'debug',
+  // 'growi:cli:StickyStretchableScroller': 'debug',
+
 };

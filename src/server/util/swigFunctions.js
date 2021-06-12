@@ -1,7 +1,6 @@
-module.exports = function(crowi, app, req, locals) {
+module.exports = function(crowi, req, locals) {
   const debug = require('debug')('growi:lib:swigFunctions');
   const stringWidth = require('string-width');
-  const entities = require('entities');
 
   const { pathUtils } = require('growi-commons');
 
@@ -13,7 +12,6 @@ module.exports = function(crowi, app, req, locals) {
     passportService,
     appService,
     aclService,
-    fileUploadService,
     customizeService,
   } = crowi;
   debug('initializing swigFunctions');
@@ -70,7 +68,6 @@ module.exports = function(crowi, app, req, locals) {
    */
   locals.appService = appService;
   locals.aclService = aclService;
-  locals.fileUploadService = fileUploadService;
   locals.customizeService = customizeService;
   locals.passportService = passportService;
   locals.pathUtils = pathUtils;
@@ -114,13 +111,6 @@ module.exports = function(crowi, app, req, locals) {
     return crowi.passportService.getSamlMissingMandatoryConfigKeys();
   };
 
-  locals.searchConfigured = function() {
-    if (crowi.getSearcher()) {
-      return true;
-    }
-    return false;
-  };
-
   locals.isHackmdSetup = function() {
     return process.env.HACKMD_URI != null;
   };
@@ -156,7 +146,7 @@ module.exports = function(crowi, app, req, locals) {
 
   locals.isTrashPage = function() {
     const path = req.path || '';
-    if (path.match(/^\/trash\/.*/)) {
+    if (path.match(/^\/trash(\/.*)?$/)) {
       return true;
     }
 
@@ -181,7 +171,7 @@ module.exports = function(crowi, app, req, locals) {
     return pages.map((page) => {
       return {
         id: page.id,
-        path: entities.encodeHTML(page.path),
+        path: page.path,
         revision: page.revision,
       };
     });

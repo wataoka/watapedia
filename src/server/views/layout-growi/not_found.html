@@ -1,21 +1,17 @@
 {% extends 'base/layout.html' %}
 
-
-{% block content_header %}
-  {% include 'widget/header.html' %}
-{% endblock %}
-
+{% block html_base_css %}not-found-page{% endblock %}
 
 {% block content_main_before %}
-  {% include '../widget/page_alerts.html' %}
+  <div class="grw-container-convertible">
+    {% include '../widget/page_alerts.html' %}
+  </div>
 {% endblock %}
 
 
 {% block content_main %}
-  <div class="row">
-    <div class="col-lg-10 col-md-9">
-      {% include '../widget/not_found_content.html' %}
-    </div> {# /.col- #}
+  <div class="grw-container-convertible">
+    {% include '../widget/not_found_content.html' %}
   </div>
 {% endblock %}
 

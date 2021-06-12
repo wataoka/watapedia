@@ -24,7 +24,7 @@ export default class EditorContainer extends Container {
     }
 
     this.state = {
-      tags: [],
+      tags: null,
 
       isSlackEnabled: false,
       slackChannels: mainContent.getAttribute('data-slack-channels') || '',
@@ -35,6 +35,7 @@ export default class EditorContainer extends Container {
 
       editorOptions: {},
       previewOptions: {},
+      indentSize: this.appContainer.config.adminPreferredIndentSize || 4,
     };
 
     this.isSetBeforeunloadEventHandler = false;
@@ -57,16 +58,19 @@ export default class EditorContainer extends Container {
    * initialize state for page permission
    */
   initStateGrant() {
-    const elem = document.getElementById('save-page-controls');
+    const mainContent = document.getElementById('content-main');
 
-    if (elem) {
-      this.state.grant = +elem.dataset.grant;
+    if (mainContent == null) {
+      logger.debug('#content-main element is not exists');
+      return;
+    }
 
-      const grantGroupId = elem.dataset.grantGroup;
-      if (grantGroupId != null && grantGroupId.length > 0) {
-        this.state.grantGroupId = grantGroupId;
-        this.state.grantGroupName = elem.dataset.grantGroupName;
-      }
+    this.state.grant = +mainContent.getAttribute('data-page-grant');
+
+    const grantGroupId = mainContent.getAttribute('data-page-grant-group');
+    if (grantGroupId != null && grantGroupId.length > 0) {
+      this.state.grantGroupId = grantGroupId;
+      this.state.grantGroupName = mainContent.getAttribute('data-page-grant-group-name');
     }
   }
 
@@ -148,7 +152,10 @@ export default class EditorContainer extends Container {
     return opt;
   }
 
+  // See https://developer.mozilla.org/en-US/docs/Web/API/WindowEventHandlers/onbeforeunload#example
   showUnsavedWarning(e) {
+    // Cancel the event
+    e.preventDefault();
     // display browser default message
     e.returnValue = '';
     return '';

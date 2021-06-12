@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 
 import { Waypoint } from 'react-waypoint';
 
-import { createSubscribedElement } from '../UnstatedUtils';
+import { withUnstatedContainers } from '../UnstatedUtils';
 import GrowiRenderer from '../../util/GrowiRenderer';
 import AppContainer from '../../services/AppContainer';
 
@@ -22,7 +22,7 @@ class RevisionLoader extends React.Component {
       markdown: '',
       isLoading: false,
       isLoaded: false,
-      error: null,
+      errors: null,
     };
 
     this.loadData = this.loadData.bind(this);
@@ -40,27 +40,29 @@ class RevisionLoader extends React.Component {
       this.setState({ isLoading: true });
     }
 
-    const requestData = {
-      page_id: this.props.pageId,
-      revision_id: this.props.revisionId,
-    };
+    const { pageId, revisionId } = this.props;
+
 
     // load data with REST API
-    const res = await this.props.appContainer.apiGet('/revisions.get', requestData);
-    this.setState({ isLoaded: true, isLoading: false });
+    try {
+      const res = await this.props.appContainer.apiv3Get(`/revisions/${revisionId}`, { pageId });
 
-    if (res != null && !res.ok) {
-      throw new Error(res.error);
+      this.setState({
+        markdown: res.data.revision.body,
+        errors: null,
+      });
+
+      if (this.props.onRevisionLoaded != null) {
+        this.props.onRevisionLoaded(res.data.revision);
+      }
+    }
+    catch (errors) {
+      this.setState({ errors });
+    }
+    finally {
+      this.setState({ isLoaded: true, isLoading: false });
     }
 
-    this.setState({
-      markdown: res.revision.body,
-      error: null,
-    });
-
-    if (this.props.onRevisionLoaded != null) {
-      this.props.onRevisionLoaded(res.revision);
-    }
   }
 
   onWaypointChange(event) {
@@ -92,8 +94,11 @@ class RevisionLoader extends React.Component {
 
     // ----- after load -----
     let markdown = this.state.markdown;
-    if (this.state.error != null) {
-      markdown = `<span class="text-muted"><em>${this.state.error}</em></span>`;
+    if (this.state.errors != null) {
+      const errorMessages = this.state.errors.map((error) => {
+        return `<span class="text-muted"><em>${error.message}</em></span>`;
+      });
+      markdown = errorMessages.join('');
     }
 
     return (
@@ -110,9 +115,7 @@ class RevisionLoader extends React.Component {
 /**
  * Wrapper component for using unstated
  */
-const RevisionLoaderWrapper = (props) => {
-  return createSubscribedElement(RevisionLoader, props, [AppContainer]);
-};
+const RevisionLoaderWrapper = withUnstatedContainers(RevisionLoader, [AppContainer]);
 
 RevisionLoader.propTypes = {
   appContainer: PropTypes.instanceOf(AppContainer).isRequired,

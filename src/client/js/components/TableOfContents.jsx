@@ -1,123 +1,97 @@
-import React from 'react';
+import React, { useCallback, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import loggerFactory from '@alias/logger';
 
 import { withTranslation } from 'react-i18next';
 
-import { debounce } from 'throttle-debounce';
-
-import AppContainer from '../services/AppContainer';
 import PageContainer from '../services/PageContainer';
+import NavigationContainer from '../services/NavigationContainer';
 
-import { createSubscribedElement } from './UnstatedUtils';
+import { withUnstatedContainers } from './UnstatedUtils';
 
-// get these value with
-//   document.querySelector('.revision-toc').getBoundingClientRect().top
-const DEFAULT_REVISION_TOC_TOP_FOR_GROWI_LAYOUT = 190;
-const DEFAULT_REVISION_TOC_TOP_FOR_KIBELA_LAYOUT = 105;
+import StickyStretchableScroller from './StickyStretchableScroller';
+
+// eslint-disable-next-line no-unused-vars
+const logger = loggerFactory('growi:TableOfContents');
 
 /**
  * @author Yuki Takei <yuki@weseek.co.jp>
  *
- * @export
- * @class TableOfContents
- * @extends {React.Component}
  */
-class TableOfContents extends React.Component {
+const TableOfContents = (props) => {
 
-  constructor(props) {
-    super(props);
+  const { t, pageContainer, navigationContainer } = props;
+  const { pageUser } = pageContainer.state;
+  const isUserPage = pageUser != null;
 
-    this.resetScrollbarDebounced = debounce(100, this.resetScrollbar);
-  }
-
-  componentDidUpdate() {
-    const { layoutType } = this.props.appContainer.config;
-    if (layoutType === 'crowi') {
-      return;
-    }
-
-    let defaultRevisionTocTop = DEFAULT_REVISION_TOC_TOP_FOR_GROWI_LAYOUT;
-    if (layoutType === 'kibela') {
-      defaultRevisionTocTop = DEFAULT_REVISION_TOC_TOP_FOR_KIBELA_LAYOUT;
-    }
-
-    // initialize
-    this.resetScrollbar(defaultRevisionTocTop);
-
-    /*
-     * set event listener
-     */
-    // resize
-    window.addEventListener('resize', (event) => {
-      this.resetScrollbarDebounced(defaultRevisionTocTop);
-    });
-    // affix on
-    $('#revision-toc').on('affixed.bs.affix', () => {
-      this.resetScrollbar(this.getCurrentRevisionTocTop());
-    });
-    // affix off
-    $('#revision-toc').on('affixed-top.bs.affix', () => {
-      this.resetScrollbar(defaultRevisionTocTop);
-    });
-  }
-
-  getCurrentRevisionTocTop() {
+  const calcViewHeight = useCallback(() => {
     // calculate absolute top of '#revision-toc' element
-    const revisionTocElem = document.querySelector('.revision-toc');
-    return revisionTocElem.getBoundingClientRect().top;
-  }
+    const parentElem = document.querySelector('.grw-side-contents-container');
+    const parentBottom = parentElem.getBoundingClientRect().bottom;
+    const containerElem = document.querySelector('#revision-toc');
+    const containerTop = containerElem.getBoundingClientRect().top;
+    const containerComputedStyle = getComputedStyle(containerElem);
+    const containerPaddingTop = parseFloat(containerComputedStyle['padding-top']);
 
-  resetScrollbar(revisionTocTop) {
-    const tocContentElem = document.querySelector('.revision-toc .markdownIt-TOC');
+    // get smaller bottom line of window height - the height of ContentLinkButtons and .system-version height) and containerTop
+    let bottom = Math.min(window.innerHeight - 41 - 20, parentBottom);
 
-    if (tocContentElem == null) {
-      return;
+    if (isUserPage) {
+      // raise the bottom line by the height and margin-top of UserContentLinks
+      bottom -= 45;
     }
+    // bottom - revisionToc top
+    return bottom - (containerTop + containerPaddingTop);
+  }, [isUserPage]);
 
-    // window height - revisionTocTop - .system-version height
-    const viewHeight = window.innerHeight - revisionTocTop - 20;
+  const { tocHtml } = pageContainer.state;
 
-    const tocContentHeight = tocContentElem.getBoundingClientRect().height + 15; // add margin
+  // execute after generation toc html
+  useEffect(() => {
+    const tocDom = document.getElementById('revision-toc-content');
+    const anchorsInToc = Array.from(tocDom.getElementsByTagName('a'));
+    navigationContainer.addSmoothScrollEvent(anchorsInToc);
+  }, [tocHtml, navigationContainer]);
 
-    if (viewHeight < tocContentHeight) {
-      $('#revision-toc-content').slimScroll({
-        railVisible: true,
-        position: 'right',
-        height: viewHeight,
-      });
-    }
-    else {
-      $('#revision-toc-content').slimScroll({ destroy: true });
-    }
-  }
+  return (
+    <StickyStretchableScroller
+      contentsElemSelector=".revision-toc .markdownIt-TOC"
+      stickyElemSelector=".grw-side-contents-sticky-container"
+      calcViewHeightFunc={calcViewHeight}
+    >
+      { tocHtml !== ''
+      ? (
+        <div
+          id="revision-toc-content"
+          className="revision-toc-content mb-3"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: tocHtml }}
+        />
+      )
+      : (
+        <div
+          id="revision-toc-content"
+          className="revision-toc-content mb-2"
+        >
+          <span className="text-muted">({t('page_table_of_contents.empty')})</span>
+        </div>
+      ) }
 
-  render() {
-    const { tocHtml } = this.props.pageContainer.state;
+    </StickyStretchableScroller>
+  );
 
-    return (
-      <div
-        id="revision-toc-content"
-        className="revision-toc-content"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{
-          __html: tocHtml,
-        }}
-      />
-    );
-  }
-
-}
+};
 
 /**
  * Wrapper component for using unstated
  */
-const TableOfContentsWrapper = (props) => {
-  return createSubscribedElement(TableOfContents, props, [AppContainer, PageContainer]);
-};
+const TableOfContentsWrapper = withUnstatedContainers(TableOfContents, [PageContainer, NavigationContainer]);
 
 TableOfContents.propTypes = {
-  appContainer: PropTypes.instanceOf(AppContainer).isRequired,
+  t: PropTypes.func.isRequired, // i18next
+
   pageContainer: PropTypes.instanceOf(PageContainer).isRequired,
+  navigationContainer: PropTypes.instanceOf(NavigationContainer).isRequired,
 };
 
 export default withTranslation()(TableOfContentsWrapper);

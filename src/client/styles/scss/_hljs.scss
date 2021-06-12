@@ -2,7 +2,8 @@ pre.hljs {
   position: relative;
 
   // override Highlight Js Style Border
-  border-radius: 3px;
+  border: 1px solid $gray-500;
+  border-radius: $border-radius;
   &.hljs-no-border {
     border: none;
   }
@@ -14,8 +15,8 @@ pre.hljs {
     padding: 0 4px;
     font-style: normal;
     font-weight: bold;
-    color: #333;
-    background: #ccc;
+    color: $gray-900;
+    background: $gray-300;
     opacity: 0.6;
   }
 }
@@ -23,12 +24,12 @@ pre.hljs {
 // styles for highlightjs-line-numbers
 .hljs-ln td.hljs-ln-numbers {
   padding-right: 5px;
-  color: #ccc;
+  color: $gray-300;
 
   text-align: center;
   vertical-align: top;
   user-select: none;
-  border-right: 1px solid #ccc;
+  border-right: 1px solid $gray-300;
 }
 
 .hljs-ln td.hljs-ln-code {

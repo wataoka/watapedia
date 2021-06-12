@@ -1,6 +1,52 @@
+/**
+ * @swagger
+ *
+ *  components:
+ *    schemas:
+ *      User:
+ *        description: User
+ *        type: object
+ *        properties:
+ *          __v:
+ *            type: number
+ *            description: record version
+ *            example: 0
+ *          _id:
+ *            type: string
+ *            description: user ID
+ *            example: 5ae5fccfc5577b0004dbd8ab
+ *          lang:
+ *            type: string
+ *            description: language
+ *            example: 'en_US'
+ *          status:
+ *            type: integer
+ *            description: status
+ *            example: 0
+ *          admin:
+ *            type: boolean
+ *            description: whether the admin
+ *            example: false
+ *          email:
+ *            type: string
+ *            description: E-Mail address
+ *            example: alice@aaa.aaa
+ *          username:
+ *            type: string
+ *            description: username
+ *            example: alice
+ *          name:
+ *            type: string
+ *            description: full name
+ *            example: Alice
+ *          createdAt:
+ *            type: string
+ *            description: date created at
+ *            example: 2010-01-01T00:00:00.000Z
+ */
+
 module.exports = function(crowi, app) {
   const User = crowi.model('User');
-  const Bookmark = crowi.model('Bookmark');
   const ApiResponse = require('../util/apiResponse');
 
   const actions = {};
@@ -9,16 +55,6 @@ module.exports = function(crowi, app) {
   const api = {};
 
   actions.api = api;
-
-  api.bookmarks = function(req, res) {
-    const options = {
-      skip: req.query.offset || 0,
-      limit: req.query.limit || 50,
-    };
-    Bookmark.findByUser(req.user, options, (err, bookmarks) => {
-      res.json(bookmarks);
-    });
-  };
 
   api.checkUsername = function(req, res) {
     const username = req.query.username;
@@ -36,6 +72,41 @@ module.exports = function(crowi, app) {
       });
   };
 
+  /**
+   * @swagger
+   *
+   *    /users.list:
+   *      get:
+   *        tags: [Users, CrowiCompatibles]
+   *        operationId: listUsersV1
+   *        summary: /users.list
+   *        description: Get list of users
+   *        parameters:
+   *          - in: query
+   *            name: user_ids
+   *            schema:
+   *              type: string
+   *              description: user IDs
+   *              example: 5e06fcc7516d64004dbf4da6,5e098d53baa2ac004e7d24ad
+   *        responses:
+   *          200:
+   *            description: Succeeded to get list of users.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *                    users:
+   *                      type: array
+   *                      items:
+   *                        $ref: '#/components/schemas/User'
+   *                      description: user list
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
+   */
   /**
    * @api {get} /users.list Get user list
    * @apiName GetUserList
@@ -56,7 +127,7 @@ module.exports = function(crowi, app) {
 
     const data = {};
     try {
-      const users = await userFetcher.populate(User.IMAGE_POPULATION);
+      const users = await userFetcher;
       data.users = users.map((user) => {
         // omit email
         if (user.isEmailPublished !== true) { // compare to 'true' because Crowi original data doesn't have 'isEmailPublished'

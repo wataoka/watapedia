@@ -2,7 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { AsyncTypeahead } from 'react-bootstrap-typeahead';
 
-import { createSubscribedElement } from '../UnstatedUtils';
+import { withUnstatedContainers } from '../UnstatedUtils';
 import AppContainer from '../../services/AppContainer';
 
 /**
@@ -82,6 +82,7 @@ class TagsInput extends React.Component {
           options={this.state.resultTags} // Search result (Some tag names)
           placeholder="tag name"
           selectHintOnEnter
+          autoFocus={this.props.autoFocus}
         />
       </div>
     );
@@ -92,18 +93,18 @@ class TagsInput extends React.Component {
 /**
  * Wrapper component for using unstated
  */
-const TagsInputWrapper = (props) => {
-  return createSubscribedElement(TagsInput, props, [AppContainer]);
-};
+const TagsInputWrapper = withUnstatedContainers(TagsInput, [AppContainer]);
 
 TagsInput.propTypes = {
-  appContainer: PropTypes.instanceOf(AppContainer).isRequired,
+  appContainer:  PropTypes.instanceOf(AppContainer).isRequired,
 
-  tags: PropTypes.array.isRequired,
+  tags:          PropTypes.array.isRequired,
   onTagsUpdated: PropTypes.func.isRequired,
+  autoFocus:     PropTypes.bool,
 };
 
 TagsInput.defaultProps = {
+  autoFocus:     false,
 };
 
 export default TagsInputWrapper;

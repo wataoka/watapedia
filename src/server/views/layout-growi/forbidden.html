@@ -1,22 +1,22 @@
 {% extends 'base/layout.html' %}
 
 
-{% block content_header %}
-  {% include 'widget/header.html' with {forbidden: true} %}
-{% endblock %}
-
-
 {% block content_main_before %}
-  {% include '../widget/page_alerts.html' %}
+  <div class="container-lg">
+    {% include '../widget/page_alerts.html' %}
+  </div>
 {% endblock %}
-
 
 {% block content_main %}
-  <div class="row">
-    <div class="col-lg-10 col-md-9">
-      {% include '../widget/forbidden_content.html' %}
-    </div> {# /.col- #}
+  <div
+    id="content-main"
+    class="content-main page-list"
+    data-path="{{ encodeURI(path) }}"
+    data-current-user="{% if user %}{{ user._id.toString() }}{% endif %}"
+    data-page-is-not-creatable="true"
+    >
   </div>
+  <div class="container-lg" id="forbidden-page"></div>
 {% endblock %}
 
 {% block body_end %}

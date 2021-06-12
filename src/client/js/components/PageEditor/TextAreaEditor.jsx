@@ -1,9 +1,9 @@
 import React from 'react';
 // import PropTypes from 'prop-types';
 
-import FormControl from 'react-bootstrap/es/FormControl';
-
 import InterceptorManager from '@commons/service/interceptor-manager';
+
+import { Input } from 'reactstrap';
 
 import AbstractEditor from './AbstractEditor';
 
@@ -22,6 +22,8 @@ export default class TextAreaEditor extends AbstractEditor {
       value: this.props.value,
       isGfmMode: this.props.isGfmMode,
     };
+
+    this.textarea = React.createRef();
 
     this.init();
 
@@ -149,6 +151,13 @@ export default class TextAreaEditor extends AbstractEditor {
     this.replaceValue(text, this.getBolPos(), lowerPos);
   }
 
+  /**
+   * @inheritDoc
+   */
+  replaceLine(text) {
+    this.replaceValue(text, this.getBolPos(), this.getEolPos());
+  }
+
   getBolPos() {
     const currentPos = this.textarea.selectionStart;
     return this.textarea.value.lastIndexOf('\n', currentPos - 1) + 1;
@@ -244,10 +253,10 @@ export default class TextAreaEditor extends AbstractEditor {
   render() {
     return (
       <React.Fragment>
-        <FormControl
-          componentClass="textarea"
-          className="textarea-editor"
-          inputRef={(ref) => { this.textarea = ref }}
+        <Input
+          type="textarea"
+          className="textarea-editor shadow-none"
+          innerRef={(c) => { this.textarea = c }}
           defaultValue={this.state.value}
           onChange={(e) => {
           if (this.props.onChange != null) {

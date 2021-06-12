@@ -1,4 +1,4 @@
-.page-list {
+body .page-list {
   .page-list-container {
     font-size: 15px;
     line-height: 1.6em;
@@ -9,30 +9,33 @@
     margin: 0;
 
     > li {
-      margin: 0;
       list-style: none;
 
-      .picture {
-        width: 16px;
-        height: 16px;
-      }
-
       > a {
-        display: inline;
-        padding: 0 4px;
+        padding: 0px;
         color: inherit;
+
+        &:hover {
+          color: inherit;
+        }
+      }
+    }
+
+    .picture {
+      width: 16px;
+      height: 16px;
+      vertical-align: text-bottom;
+    }
+
+    .page-list-meta {
+      font-size: 0.9em;
+
+      > span {
+        margin-right: 0.3rem;
       }
 
-      > span.page-list-meta {
-        font-size: 0.9em;
-
-        > span {
-          margin-right: 0.3rem;
-        }
-
-        i {
-          margin-right: 2px;
-        }
+      i {
+        margin-right: 2px;
       }
     }
 
@@ -51,7 +54,7 @@
 .popular-page-high {
   font-size: 1.1em;
   font-weight: bold;
-  color: #e80000;
+  color: darken($red, 5%);
 }
 
 .popular-page-mid {
@@ -63,9 +66,9 @@
   color: #ab7c7c;
 }
 
-.panel-timeline {
-  border: 1px solid #ccc;
-  > .panel-heading {
-    background-color: #ccc;
+.card-timeline {
+  border: 1px solid $gray-300;
+  > .card-header {
+    background-color: $gray-300;
   }
 }

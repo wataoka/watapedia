@@ -1,118 +1,211 @@
-import React from 'react';
+import React, {
+  useState, useMemo, useCallback,
+} from 'react';
 import PropTypes from 'prop-types';
 
-import Dropdown from 'react-bootstrap/es/Dropdown';
-import MenuItem from 'react-bootstrap/es/MenuItem';
+import { withTranslation } from 'react-i18next';
+
+import {
+  Dropdown, DropdownToggle, DropdownMenu, DropdownItem,
+  Tooltip,
+} from 'reactstrap';
 
 import { CopyToClipboard } from 'react-copy-to-clipboard';
 
-export default class CopyDropdown extends React.Component {
+import { encodeSpaces } from '@commons/util/path-utils';
 
-  constructor(props) {
-    super(props);
+/* eslint-disable react/prop-types */
+const DropdownItemContents = ({ title, contents }) => (
+  <>
+    <div className="h6 mt-1 mb-2"><strong>{title}</strong></div>
+    <div className="card well mb-1 p-2">{contents}</div>
+  </>
+);
+/* eslint-enable react/prop-types */
 
-    // retrieve xss library from window
-    this.xss = window.xss;
 
-    this.generatePageUrl = this.generatePageUrl.bind(this);
-  }
+const CopyDropdown = (props) => {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [isParamsAppended, setParamsAppended] = useState(!props.isShareLinkMode);
 
-  showToolTip() {
-    const buttonId = '#copyPagePathDropdown';
-    $(buttonId).tooltip('show');
+  /*
+   * functions to construct labels and URLs
+   */
+  const getUriParams = useCallback(() => {
+    if (!isParamsAppended || !dropdownOpen) {
+      return '';
+    }
+
+    const {
+      search, hash,
+    } = window.location;
+
+    return `${search}${hash}`;
+  }, [isParamsAppended, dropdownOpen]);
+
+  const pagePathWithParams = useMemo(() => {
+    const { pagePath } = props;
+    return decodeURI(`${pagePath}${getUriParams()}`);
+  }, [props, getUriParams]);
+
+  const pagePathUrl = useMemo(() => {
+    const { origin } = window.location;
+    return `${origin}${encodeSpaces(pagePathWithParams)}`;
+  }, [pagePathWithParams]);
+
+  const permalink = useMemo(() => {
+    const { origin } = window.location;
+    const { pageId, isShareLinkMode } = props;
+
+    if (pageId == null) {
+      return null;
+    }
+    if (isShareLinkMode) {
+      return decodeURI(`${origin}/share/${pageId}`);
+    }
+
+    return encodeSpaces(decodeURI(`${origin}/${pageId}${getUriParams()}`));
+  }, [props, getUriParams]);
+
+  const markdownLink = useMemo(() => {
+    const { pagePath } = props;
+
+    const label = decodeURI(`${pagePath}${getUriParams()}`);
+    // const permalink = generatePermalink();
+
+    return `[${label}](${permalink})`;
+  }, [props, getUriParams, permalink]);
+
+
+  /**
+   * control
+   */
+  const toggleDropdown = useCallback(() => {
+    setDropdownOpen(!dropdownOpen);
+  }, [dropdownOpen]);
+
+  const toggleAppendParams = useCallback(() => {
+    setParamsAppended(!isParamsAppended);
+  }, [isParamsAppended]);
+
+  const showToolTip = useCallback(() => {
+    setTooltipOpen(true);
     setTimeout(() => {
-      $(buttonId).tooltip('hide');
+      setTooltipOpen(false);
     }, 1000);
-  }
+  }, []);
 
-  generatePageUrl() {
-    return (this.props.pageId == null)
-      ? decodeURIComponent(window.location.pathname + window.location.search)
-      : `${window.location.origin}/${this.props.pageId}`;
-  }
 
-  generateMarkdownLink() {
-    return;
-  }
+  /*
+   * render
+   */
+  const {
+    t, dropdownToggleId, pageId, dropdownToggleClassName, children, isShareLinkMode,
+  } = props;
 
-  render() {
-    const { t } = this.props;
+  const customSwitchForParamsId = `customSwitchForParams_${dropdownToggleId}`;
 
-    const safePagePath = this.xss.process(this.props.pagePath);
-    const url = this.generatePageUrl();
-
-    return (
-      <Dropdown id="copyPagePathDropdown">
-
-        <Dropdown.Toggle
-          className="btn-copy"
-          style={this.props.buttonStyle}
-          data-toggle="tooltip"
-          data-placement="bottom"
-          data-trigger="manual"
-          title="copied!"
+  return (
+    <>
+      <Dropdown className="grw-copy-dropdown" isOpen={dropdownOpen} toggle={toggleDropdown}>
+        <DropdownToggle
+          caret
+          className={dropdownToggleClassName}
         >
-          <i className="ti-clipboard"></i>
-        </Dropdown.Toggle>
+          <span id={dropdownToggleId}>{children}</span>
+        </DropdownToggle>
 
-        <Dropdown.Menu>
-          <h5 className="ml-3 my-0 text-muted">{ t('copy_to_clipboard.Copy to clipboard') }</h5>
-          <MenuItem divider></MenuItem>
+        <DropdownMenu positionFixed modifiers={{ preventOverflow: { boundariesElement: null } }}>
+
+          <div className="d-flex align-items-center justify-content-between">
+            <DropdownItem header className="px-3">
+              { t('copy_to_clipboard.Copy to clipboard') }
+            </DropdownItem>
+            { !isShareLinkMode && (
+              <div className="px-3 custom-control custom-switch custom-switch-sm">
+                <input
+                  type="checkbox"
+                  id={customSwitchForParamsId}
+                  className="custom-control-input"
+                  checked={isParamsAppended}
+                  onChange={toggleAppendParams}
+                />
+                <label className="custom-control-label small" htmlFor={customSwitchForParamsId}>Append params</label>
+              </div>
+            ) }
+          </div>
+
+          <DropdownItem divider className="my-0"></DropdownItem>
 
           {/* Page path */}
-          <CopyToClipboard text={this.props.pagePath} onCopy={this.showToolTip}>
-            <MenuItem>
-              <div className="d-inline-flex flex-column">
-                <h6 className="mt-1 mb-2"><strong>{ t('copy_to_clipboard.Page path') }</strong></h6>
-                <span className="small">{safePagePath}</span>
-              </div>
-            </MenuItem>
+          <CopyToClipboard text={pagePathWithParams} onCopy={showToolTip}>
+            <DropdownItem className="px-3">
+              <DropdownItemContents title={t('copy_to_clipboard.Page path')} contents={pagePathWithParams} />
+            </DropdownItem>
           </CopyToClipboard>
-          {/* Parmanent Link */}
-          { this.props.pageId && (
-            <CopyToClipboard text={url} onCopy={this.showToolTip}>
-              <MenuItem>
-                <div className="d-inline-flex flex-column">
-                  <h6 className="mt-1 mb-2"><strong>{ t('copy_to_clipboard.Parmanent link') }</strong></h6>
-                  <span className="small">{url}</span>
-                </div>
-              </MenuItem>
+
+          <DropdownItem divider className="my-0"></DropdownItem>
+
+          {/* Page path URL */}
+          <CopyToClipboard text={pagePathUrl} onCopy={showToolTip}>
+            <DropdownItem className="px-3">
+              <DropdownItemContents title={t('copy_to_clipboard.Page URL')} contents={pagePathUrl} />
+            </DropdownItem>
+          </CopyToClipboard>
+          <DropdownItem divider className="my-0"></DropdownItem>
+
+          {/* Permanent Link */}
+          { pageId && (
+            <CopyToClipboard text={permalink} onCopy={showToolTip}>
+              <DropdownItem className="px-3">
+                <DropdownItemContents title={t('copy_to_clipboard.Permanent link')} contents={permalink} />
+              </DropdownItem>
             </CopyToClipboard>
           )}
-          {/* Page path + Parmanent Link */}
-          { this.props.pageId && (
-            <CopyToClipboard text={`${this.props.pagePath}\n${url}`} onCopy={this.showToolTip}>
-              <MenuItem>
-                <div className="d-inline-flex flex-column">
-                  <h6 className="mt-1 mb-2"><strong>{ t('copy_to_clipboard.Page path and parmanent link') }</strong></h6>
-                  <span className="small mb-1">{safePagePath}</span><br></br>
-                  <span className="small">{url}</span>
-                </div>
-              </MenuItem>
+
+          <DropdownItem divider className="my-0"></DropdownItem>
+
+          {/* Page path + Permanent Link */}
+          { pageId && (
+            <CopyToClipboard text={`${pagePathWithParams}\n${permalink}`} onCopy={showToolTip}>
+              <DropdownItem className="px-3">
+                <DropdownItemContents title={t('copy_to_clipboard.Page path and permanent link')} contents={<>{pagePathWithParams}<br />{permalink}</>} />
+              </DropdownItem>
             </CopyToClipboard>
           )}
+
+          <DropdownItem divider className="my-0"></DropdownItem>
+
           {/* Markdown Link */}
-          { this.props.pageId && (
-            <CopyToClipboard text={`[${this.props.pagePath}](${url})`} onCopy={this.showToolTip}>
-              <MenuItem>
-                <div className="d-inline-flex flex-column">
-                  <h6 className="mt-1 mb-2"><strong>{ t('copy_to_clipboard.Markdown link') }</strong></h6>
-                  <span className="small">{`[${safePagePath}](${url})`}</span>
-                </div>
-              </MenuItem>
+          { pageId && (
+            <CopyToClipboard text={markdownLink} onCopy={showToolTip}>
+              <DropdownItem className="px-3 text-wrap">
+                <DropdownItemContents title={t('copy_to_clipboard.Markdown link')} contents={markdownLink} isContentsWrap />
+              </DropdownItem>
             </CopyToClipboard>
           )}
-        </Dropdown.Menu>
+        </DropdownMenu>
 
       </Dropdown>
-    );
-  }
 
-}
+      <Tooltip placement="bottom" isOpen={tooltipOpen} target={dropdownToggleId} fade={false}>
+        copied!
+      </Tooltip>
+    </>
+  );
+};
 
 CopyDropdown.propTypes = {
   t: PropTypes.func.isRequired, // i18next
+
+  children: PropTypes.node.isRequired,
+  dropdownToggleId: PropTypes.string.isRequired,
   pagePath: PropTypes.string.isRequired,
+
   pageId: PropTypes.string,
-  buttonStyle: PropTypes.object,
+  dropdownToggleClassName: PropTypes.string,
+  isShareLinkMode: PropTypes.bool,
 };
+
+export default withTranslation()(CopyDropdown);

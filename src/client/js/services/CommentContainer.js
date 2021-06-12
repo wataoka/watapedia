@@ -34,6 +34,7 @@ export default class CommentContainer extends Container {
     };
 
     this.retrieveComments = this.retrieveComments.bind(this);
+    this.checkAndUpdateImageOfCommentAuthers = this.checkAndUpdateImageOfCommentAuthers.bind(this);
   }
 
   /**
@@ -62,16 +63,38 @@ export default class CommentContainer extends Container {
   /**
    * Load data of comments and store them in state
    */
-  retrieveComments() {
+  async retrieveComments() {
     const { pageId } = this.getPageContainer().state;
 
     // get data (desc order array)
-    return this.appContainer.apiGet('/comments.get', { page_id: pageId })
-      .then((res) => {
-        if (res.ok) {
-          this.setState({ comments: res.comments });
-        }
-      });
+    const res = await this.appContainer.apiGet('/comments.get', { page_id: pageId });
+    if (res.ok) {
+      const comments = res.comments;
+      this.setState({ comments });
+
+      this.checkAndUpdateImageOfCommentAuthers(comments);
+    }
+  }
+
+  async checkAndUpdateImageOfCommentAuthers(comments) {
+    const noImageCacheUserIds = comments.filter((comment) => {
+      const { creator } = comment;
+      return creator != null && creator.imageUrlCached == null;
+    }).map((comment) => {
+      return comment.creator._id;
+    });
+
+    if (noImageCacheUserIds.length === 0) {
+      return;
+    }
+
+    try {
+      await this.appContainer.apiv3Put('/users/update.imageUrlCache', { userIds: noImageCacheUserIds });
+    }
+    catch (err) {
+      // Error alert doesn't apear, because user don't need to notice this error.
+      logger.error(err);
+    }
   }
 
   /**
@@ -100,6 +123,29 @@ export default class CommentContainer extends Container {
       });
   }
 
+  /**
+   * Load data of comments and rerender <PageComments />
+   */
+  putComment(comment, isMarkdown, commentId, author) {
+    const { pageId, revisionId } = this.getPageContainer().state;
+
+    return this.appContainer.apiPost('/comments.update', {
+      commentForm: {
+        comment,
+        page_id: pageId,
+        revision_id: revisionId,
+        is_markdown: isMarkdown,
+        comment_id: commentId,
+        author,
+      },
+    })
+      .then((res) => {
+        if (res.ok) {
+          return this.retrieveComments();
+        }
+      });
+  }
+
   deleteComment(comment) {
     return this.appContainer.apiPost('/comments.remove', { comment_id: comment._id })
       .then((res) => {
@@ -114,6 +160,7 @@ export default class CommentContainer extends Container {
 
     const endpoint = '/attachments.add';
     const formData = new FormData();
+    formData.append('_csrf', this.appContainer.csrfToken);
     formData.append('file', file);
     formData.append('path', pagePath);
     formData.append('page_id', pageId);

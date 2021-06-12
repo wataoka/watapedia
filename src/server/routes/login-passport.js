@@ -4,16 +4,16 @@ module.exports = function(crowi, app) {
   const debug = require('debug')('growi:routes:login-passport');
   const logger = require('@alias/logger')('growi:routes:login-passport');
   const passport = require('passport');
-  const { URL } = require('url');
   const ExternalAccount = crowi.model('ExternalAccount');
   const passportService = crowi.passportService;
+  const ApiResponse = require('../util/apiResponse');
 
   /**
    * success handler
    * @param {*} req
    * @param {*} res
    */
-  const loginSuccess = (req, res, user) => {
+  const loginSuccessHandler = (req, res, user) => {
     // update lastLoginAt
     user.updateLastLoginAt(new Date(), (err, userData) => {
       if (err) {
@@ -22,25 +22,10 @@ module.exports = function(crowi, app) {
       }
     });
 
-    const jumpTo = req.session.jumpTo;
-    if (jumpTo) {
-      req.session.jumpTo = null;
-
-      // prevention from open redirect
-      try {
-        const redirectUrl = new URL(jumpTo, `${req.protocol}://${req.get('host')}`);
-        if (redirectUrl.hostname === req.hostname) {
-          return res.redirect(redirectUrl);
-        }
-        logger.warn('Requested redirect URL is invalid, redirect to root page');
-      }
-      catch (err) {
-        logger.warn('Requested redirect URL is invalid, redirect to root page', err);
-        return res.redirect('/');
-      }
-    }
-
-    return res.redirect('/');
+    const { redirectTo } = req.session;
+    // remove session.redirectTo
+    delete req.session.redirectTo;
+    return res.safeRedirect(redirectTo);
   };
 
   /**
@@ -48,9 +33,18 @@ module.exports = function(crowi, app) {
    * @param {*} req
    * @param {*} res
    */
-  const loginFailure = (req, res, next) => {
-    req.flash('errorMessage', 'Sign in failure.');
+  const loginFailureHandler = (req, res, message) => {
+    req.flash('errorMessage', message || req.t('message.sign_in_failure'));
     return res.redirect('/login');
+  };
+
+  /**
+   * middleware for login failure
+   * @param {*} req
+   * @param {*} res
+   */
+  const loginFailure = (req, res) => {
+    return loginFailureHandler(req, res, req.t('message.sign_in_failure'));
   };
 
   /**
@@ -95,7 +89,8 @@ module.exports = function(crowi, app) {
       ldapAccountInfo = await promisifiedPassportAuthentication(strategyName, req, res);
     }
     catch (err) {
-      return next(err);
+      debug(err.message);
+      return next();
     }
 
     // check groups for LDAP
@@ -131,8 +126,8 @@ module.exports = function(crowi, app) {
 
     // login
     await req.logIn(user, (err) => {
-      if (err) { return next(err) }
-      return loginSuccess(req, res, user);
+      if (err) { debug(err.message); return next() }
+      return loginSuccessHandler(req, res, user);
     });
   };
 
@@ -145,10 +140,10 @@ module.exports = function(crowi, app) {
   const testLdapCredentials = (req, res) => {
     if (!passportService.isLdapStrategySetup) {
       debug('LdapStrategy has not been set up');
-      return res.json({
+      return res.json(ApiResponse.success({
         status: 'warning',
-        message: 'LdapStrategy has not been set up',
-      });
+        message: req.t('message.strategy_has_not_been_set_up', { strategy: 'LdapStrategy' }),
+      }));
     }
 
     passport.authenticate('ldapauth', (err, user, info) => {
@@ -158,36 +153,36 @@ module.exports = function(crowi, app) {
 
       if (err) { // DB Error
         logger.error('LDAP Server Error: ', err);
-        return res.json({
+        return res.json(ApiResponse.success({
           status: 'warning',
           message: 'LDAP Server Error occured.',
           err,
-        });
+        }));
       }
       if (info && info.message) {
-        return res.json({
+        return res.json(ApiResponse.success({
           status: 'warning',
           message: info.message,
           ldapConfiguration: req.ldapConfiguration,
           ldapAccountInfo: req.ldapAccountInfo,
-        });
+        }));
       }
       if (user) {
         // check groups
         if (!isValidLdapUserByGroupFilter(user)) {
-          return res.json({
+          return res.json(ApiResponse.success({
             status: 'warning',
             message: 'This user does not belong to any groups designated by the group search filter.',
             ldapConfiguration: req.ldapConfiguration,
             ldapAccountInfo: req.ldapAccountInfo,
-          });
+          }));
         }
-        return res.json({
+        return res.json(ApiResponse.success({
           status: 'success',
           message: 'Successfully authenticated.',
           ldapConfiguration: req.ldapConfiguration,
           ldapAccountInfo: req.ldapAccountInfo,
-        });
+        }));
       }
     })(req, res, () => {});
   };
@@ -201,7 +196,7 @@ module.exports = function(crowi, app) {
   const loginWithLocal = (req, res, next) => {
     if (!passportService.isLocalStrategySetup) {
       debug('LocalStrategy has not been set up');
-      req.flash('warningMessage', 'LocalStrategy has not been set up');
+      req.flash('warningMessage', req.t('message.strategy_has_not_been_set_up', { strategy: 'LocalStrategy' }));
       return next();
     }
 
@@ -217,14 +212,14 @@ module.exports = function(crowi, app) {
 
       if (err) { // DB Error
         logger.error('Database Server Error: ', err);
-        req.flash('warningMessage', 'Database Server Error occured.');
+        req.flash('warningMessage', req.t('message.database_error'));
         return next(); // pass and the flash message is displayed when all of authentications are failed.
       }
       if (!user) { return next() }
       req.logIn(user, (err) => {
-        if (err) { return next() }
+        if (err) { debug(err.message); return next() }
 
-        return loginSuccess(req, res, user);
+        return loginSuccessHandler(req, res, user);
       });
     })(req, res, next);
   };
@@ -232,7 +227,7 @@ module.exports = function(crowi, app) {
   const loginWithGoogle = function(req, res, next) {
     if (!passportService.isGoogleStrategySetup) {
       debug('GoogleStrategy has not been set up');
-      req.flash('warningMessage', 'GoogleStrategy has not been set up');
+      req.flash('warningMessage', req.t('message.strategy_has_not_been_set_up', { strategy: 'GoogleStrategy' }));
       return next();
     }
 
@@ -242,6 +237,8 @@ module.exports = function(crowi, app) {
   };
 
   const loginPassportGoogleCallback = async(req, res, next) => {
+    const globalLang = crowi.configManager.getConfig('crowi', 'app:globalLang');
+
     const providerId = 'google';
     const strategyName = 'google';
 
@@ -250,32 +247,56 @@ module.exports = function(crowi, app) {
       response = await promisifiedPassportAuthentication(strategyName, req, res);
     }
     catch (err) {
-      return loginFailure(req, res, next);
+      return loginFailureHandler(req, res);
+    }
+
+    let name;
+
+    switch (globalLang) {
+      case 'en_US':
+        name = `${response.name.givenName} ${response.name.familyName}`;
+        break;
+      case 'ja_JP':
+        name = `${response.name.familyName} ${response.name.givenName}`;
+        break;
+      default:
+        name = `${response.name.givenName} ${response.name.familyName}`;
+        break;
     }
 
     const userInfo = {
       id: response.id,
       username: response.displayName,
-      name: `${response.name.givenName} ${response.name.familyName}`,
+      name,
     };
+
+    // Emails are not empty if it exists
+    // See https://github.com/passport/express-4.x-facebook-example/blob/dfce5495d0313174a1b5039bab2c2dcda7e0eb61/views/profile.ejs
+    // Both Facebook and Google use OAuth 2.0, the code is similar
+    // See https://github.com/jaredhanson/passport-google-oauth2/blob/723e8f3e8e711275f89e0163e2c77cfebae33f25/README.md#examples
+    if (response.emails != null) {
+      userInfo.email = response.emails[0].value;
+      userInfo.username = userInfo.email.slice(0, userInfo.email.indexOf('@'));
+    }
+
     const externalAccount = await getOrCreateUser(req, res, userInfo, providerId);
     if (!externalAccount) {
-      return loginFailure(req, res, next);
+      return loginFailureHandler(req, res);
     }
 
     const user = await externalAccount.getPopulatedUser();
 
     // login
     req.logIn(user, (err) => {
-      if (err) { return next(err) }
-      return loginSuccess(req, res, user);
+      if (err) { debug(err.message); return next() }
+      return loginSuccessHandler(req, res, user);
     });
   };
 
   const loginWithGitHub = function(req, res, next) {
     if (!passportService.isGitHubStrategySetup) {
       debug('GitHubStrategy has not been set up');
-      req.flash('warningMessage', 'GitHubStrategy has not been set up');
+      req.flash('warningMessage', req.t('message.strategy_has_not_been_set_up', { strategy: 'GitHubStrategy' }));
       return next();
     }
 
@@ -291,7 +312,7 @@ module.exports = function(crowi, app) {
       response = await promisifiedPassportAuthentication(strategyName, req, res);
     }
     catch (err) {
-      return loginFailure(req, res, next);
+      return loginFailureHandler(req, res);
     }
 
     const userInfo = {
@@ -302,22 +323,22 @@ module.exports = function(crowi, app) {
 
     const externalAccount = await getOrCreateUser(req, res, userInfo, providerId);
     if (!externalAccount) {
-      return loginFailure(req, res, next);
+      return loginFailureHandler(req, res);
     }
 
     const user = await externalAccount.getPopulatedUser();
 
     // login
     req.logIn(user, (err) => {
-      if (err) { return next(err) }
-      return loginSuccess(req, res, user);
+      if (err) { debug(err.message); return next() }
+      return loginSuccessHandler(req, res, user);
     });
   };
 
   const loginWithTwitter = function(req, res, next) {
     if (!passportService.isTwitterStrategySetup) {
       debug('TwitterStrategy has not been set up');
-      req.flash('warningMessage', 'TwitterStrategy has not been set up');
+      req.flash('warningMessage', req.t('message.strategy_has_not_been_set_up', { strategy: 'TwitterStrategy' }));
       return next();
     }
 
@@ -333,7 +354,7 @@ module.exports = function(crowi, app) {
       response = await promisifiedPassportAuthentication(strategyName, req, res);
     }
     catch (err) {
-      return loginFailure(req, res, next);
+      return loginFailureHandler(req, res);
     }
 
     const userInfo = {
@@ -344,22 +365,22 @@ module.exports = function(crowi, app) {
 
     const externalAccount = await getOrCreateUser(req, res, userInfo, providerId);
     if (!externalAccount) {
-      return loginFailure(req, res, next);
+      return loginFailureHandler(req, res);
     }
 
     const user = await externalAccount.getPopulatedUser();
 
     // login
     req.logIn(user, (err) => {
-      if (err) { return next(err) }
-      return loginSuccess(req, res, user);
+      if (err) { debug(err.message); return next() }
+      return loginSuccessHandler(req, res, user);
     });
   };
 
   const loginWithOidc = function(req, res, next) {
     if (!passportService.isOidcStrategySetup) {
       debug('OidcStrategy has not been set up');
-      req.flash('warningMessage', 'OidcStrategy has not been set up');
+      req.flash('warningMessage', req.t('message.strategy_has_not_been_set_up', { strategy: 'OidcStrategy' }));
       return next();
     }
 
@@ -380,7 +401,7 @@ module.exports = function(crowi, app) {
     }
     catch (err) {
       debug(err);
-      return loginFailure(req, res, next);
+      return loginFailureHandler(req, res);
     }
 
     const userInfo = {
@@ -393,21 +414,21 @@ module.exports = function(crowi, app) {
 
     const externalAccount = await getOrCreateUser(req, res, userInfo, providerId);
     if (!externalAccount) {
-      return loginFailure(req, res, next);
+      return loginFailureHandler(req, res);
     }
 
     // login
     const user = await externalAccount.getPopulatedUser();
     req.logIn(user, (err) => {
-      if (err) { return next(err) }
-      return loginSuccess(req, res, user);
+      if (err) { debug(err.message); return next() }
+      return loginSuccessHandler(req, res, user);
     });
   };
 
   const loginWithSaml = function(req, res, next) {
     if (!passportService.isSamlStrategySetup) {
       debug('SamlStrategy has not been set up');
-      req.flash('warningMessage', 'SamlStrategy has not been set up');
+      req.flash('warningMessage', req.t('message.strategy_has_not_been_set_up', { strategy: 'SamlStrategy' }));
       return next();
     }
 
@@ -428,7 +449,7 @@ module.exports = function(crowi, app) {
       response = await promisifiedPassportAuthentication(strategyName, req, res);
     }
     catch (err) {
-      return loginFailure(req, res);
+      return loginFailureHandler(req, res);
     }
 
     const userInfo = {
@@ -446,18 +467,23 @@ module.exports = function(crowi, app) {
 
     const externalAccount = await getOrCreateUser(req, res, userInfo, providerId);
     if (!externalAccount) {
-      return loginFailure(req, res);
+      return loginFailureHandler(req, res);
     }
 
     const user = await externalAccount.getPopulatedUser();
+
+    // Attribute-based Login Control
+    if (!crowi.passportService.verifySAMLResponseByABLCRule(response)) {
+      return loginFailureHandler(req, res, 'Sign in failure due to insufficient privileges.');
+    }
 
     // login
     req.logIn(user, (err) => {
       if (err != null) {
         logger.error(err);
-        return loginFailure(req, res);
+        return loginFailureHandler(req, res);
       }
-      return loginSuccess(req, res, user);
+      return loginSuccessHandler(req, res, user);
     });
   };
 
@@ -470,7 +496,7 @@ module.exports = function(crowi, app) {
   const loginWithBasic = async(req, res, next) => {
     if (!passportService.isBasicStrategySetup) {
       debug('BasicStrategy has not been set up');
-      req.flash('warningMessage', 'Basic has not been set up');
+      req.flash('warningMessage', req.t('message.strategy_has_not_been_set_up', { strategy: 'Basic' }));
       return next();
     }
 
@@ -482,7 +508,7 @@ module.exports = function(crowi, app) {
       userId = await promisifiedPassportAuthentication(strategyName, req, res);
     }
     catch (err) {
-      return loginFailure(req, res);
+      return loginFailureHandler(req, res);
     }
 
     const userInfo = {
@@ -493,13 +519,13 @@ module.exports = function(crowi, app) {
 
     const externalAccount = await getOrCreateUser(req, res, userInfo, providerId);
     if (!externalAccount) {
-      return loginFailure(req, res, next);
+      return loginFailureHandler(req, res);
     }
 
     const user = await externalAccount.getPopulatedUser();
     await req.logIn(user, (err) => {
-      if (err) { return next() }
-      return loginSuccess(req, res, user);
+      if (err) { debug(err.message); return next() }
+      return loginSuccessHandler(req, res, user);
     });
   };
 
@@ -561,7 +587,7 @@ module.exports = function(crowi, app) {
         return;
       }
       else if (err.name === 'UserUpperLimitException') {
-        req.flash('warningMessage', 'Can not register more than the maximum number of users.');
+        req.flash('warningMessage', req.t('message.maximum_number_of_users'));
         return;
       }
       /* eslint-enable no-else-return */

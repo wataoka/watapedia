@@ -2,13 +2,13 @@
  * @author: Yuki Takei <yuki@weseek.co.jp>
  */
 
-const webpack = require('webpack');
-
 /*
  * Webpack Plugins
  */
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+const HardSourceWebpackPlugin = require('hard-source-webpack-plugin');
+
 const helpers = require('../src/lib/util/helpers');
 
 /**
@@ -59,14 +59,17 @@ module.exports = require('./webpack.common')({
       filename: '[name].bundle.css',
     }),
 
-    new webpack.DllReferencePlugin({
-      context: helpers.root(),
-      manifest: require(helpers.root('public/dll', 'manifest.json')),
-    }),
-
     new BundleAnalyzerPlugin({
       analyzerMode: ANALYZE ? 'server' : 'disabled',
     }),
+
+    new HardSourceWebpackPlugin(),
+    new HardSourceWebpackPlugin.ExcludeModulePlugin([
+      {
+        // see https://github.com/mzgoddard/hard-source-webpack-plugin/blob/master/README.md#excludemoduleplugin
+        test: /mini-css-extract-plugin[\\/]dist[\\/]loader/,
+      },
+    ]),
 
   ],
   optimization: {},

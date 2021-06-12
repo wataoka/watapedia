@@ -1,24 +1,30 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-import Modal from 'react-bootstrap/es/Modal';
-import Button from 'react-bootstrap/es/Button';
 import urljoin from 'url-join';
 import * as codemirror from 'codemirror';
 
+import { Button } from 'reactstrap';
 import { UnControlled as ReactCodeMirror } from 'react-codemirror2';
 
 import InterceptorManager from '@commons/service/interceptor-manager';
 
 import AbstractEditor from './AbstractEditor';
 import SimpleCheatsheet from './SimpleCheatsheet';
-import Cheatsheet from './Cheatsheet';
+
 import pasteHelper from './PasteHelper';
 import EmojiAutoCompleteHelper from './EmojiAutoCompleteHelper';
 import PreventMarkdownListInterceptor from './PreventMarkdownListInterceptor';
 import MarkdownTableInterceptor from './MarkdownTableInterceptor';
+import mlu from './MarkdownLinkUtil';
 import mtu from './MarkdownTableUtil';
+import mdu from './MarkdownDrawioUtil';
+import geu from './GridEditorUtil';
+import GridEditModal from './GridEditModal';
+import LinkEditModal from './LinkEditModal';
 import HandsontableModal from './HandsontableModal';
+import EditorIcon from './EditorIcon';
+import DrawioModal from './DrawioModal';
 
 const loadScript = require('simple-load-script');
 const loadCssSync = require('load-css-file');
@@ -50,6 +56,10 @@ require('codemirror/addon/display/placeholder');
 require('codemirror/mode/gfm/gfm');
 require('../../util/codemirror/autorefresh.ext');
 
+
+const MARKDOWN_TABLE_ACTIVATED_CLASS = 'markdown-table-activated';
+const MARKDOWN_LINK_ACTIVATED_CLASS = 'markdown-link-activated';
+
 export default class CodeMirrorEditor extends AbstractEditor {
 
   constructor(props) {
@@ -62,10 +72,14 @@ export default class CodeMirrorEditor extends AbstractEditor {
       isEnabledEmojiAutoComplete: false,
       isLoadingKeymap: false,
       isSimpleCheatsheetShown: this.props.isGfmMode && this.props.value.length === 0,
-      isCheatsheetModalButtonShown: this.props.isGfmMode && this.props.value.length > 0,
       isCheatsheetModalShown: false,
       additionalClassSet: new Set(),
     };
+
+    this.gridEditModal = React.createRef();
+    this.linkEditModal = React.createRef();
+    this.handsontableModal = React.createRef();
+    this.drawioModal = React.createRef();
 
     this.init();
 
@@ -91,7 +105,10 @@ export default class CodeMirrorEditor extends AbstractEditor {
     this.renderCheatsheetModalButton = this.renderCheatsheetModalButton.bind(this);
 
     this.makeHeaderHandler = this.makeHeaderHandler.bind(this);
+    this.showGridEditorHandler = this.showGridEditorHandler.bind(this);
+    this.showLinkEditHandler = this.showLinkEditHandler.bind(this);
     this.showHandsonTableHandler = this.showHandsonTableHandler.bind(this);
+    this.showDrawioHandler = this.showDrawioHandler.bind(this);
   }
 
   init() {
@@ -247,6 +264,14 @@ export default class CodeMirrorEditor extends AbstractEditor {
     const editor = this.getCodeMirror();
     const pos = this.selectLowerPos(editor.getCursor('from'), editor.getCursor('to'));
     editor.getDoc().replaceRange(text, this.getBol(), pos);
+  }
+
+  /**
+   * @inheritDoc
+   */
+  replaceLine(text) {
+    const editor = this.getCodeMirror();
+    editor.getDoc().replaceRange(text, this.getBol(), this.getEol());
   }
 
   /**
@@ -416,6 +441,7 @@ export default class CodeMirrorEditor extends AbstractEditor {
     const context = {
       handlers: [], // list of handlers which process enter key
       editor: this,
+      editorOptions: this.props.editorOptions,
     };
 
     const interceptorManager = this.interceptorManager;
@@ -444,23 +470,31 @@ export default class CodeMirrorEditor extends AbstractEditor {
   }
 
   cursorHandler(editor, event) {
-    const strFromBol = this.getStrFromBol();
+    const { additionalClassSet } = this.state;
+    const hasCustomClass = additionalClassSet.has(MARKDOWN_TABLE_ACTIVATED_CLASS);
+    const hasLinkClass = additionalClassSet.has(MARKDOWN_LINK_ACTIVATED_CLASS);
 
-    const autoformatTableClass = 'autoformat-markdown-table-activated';
-    const additionalClassSet = this.state.additionalClassSet;
-    const hasCustomClass = additionalClassSet.has(autoformatTableClass);
-    if (mtu.isEndOfLine(editor) && mtu.linePartOfTableRE.test(strFromBol)) {
-      if (!hasCustomClass) {
-        additionalClassSet.add(autoformatTableClass);
-        this.setState({ additionalClassSet });
-      }
+    const isInTable = mtu.isInTable(editor);
+    const isInLink = mlu.isInLink(editor);
+
+    if (!hasCustomClass && isInTable) {
+      additionalClassSet.add(MARKDOWN_TABLE_ACTIVATED_CLASS);
+      this.setState({ additionalClassSet });
     }
-    else {
-      // eslint-disable-next-line no-lonely-if
-      if (hasCustomClass) {
-        additionalClassSet.delete(autoformatTableClass);
-        this.setState({ additionalClassSet });
-      }
+
+    if (hasCustomClass && !isInTable) {
+      additionalClassSet.delete(MARKDOWN_TABLE_ACTIVATED_CLASS);
+      this.setState({ additionalClassSet });
+    }
+
+    if (!hasLinkClass && isInLink) {
+      additionalClassSet.add(MARKDOWN_LINK_ACTIVATED_CLASS);
+      this.setState({ additionalClassSet });
+    }
+
+    if (hasLinkClass && !isInLink) {
+      additionalClassSet.delete(MARKDOWN_LINK_ACTIVATED_CLASS);
+      this.setState({ additionalClassSet });
     }
   }
 
@@ -507,10 +541,15 @@ export default class CodeMirrorEditor extends AbstractEditor {
     const isGfmMode = isGfmModeTmp || this.state.isGfmMode;
     const value = valueTmp || this.getCodeMirror().getDoc().getValue();
 
-    // update isSimpleCheatsheetShown, isCheatsheetModalButtonShown
+    // update isSimpleCheatsheetShown
     const isSimpleCheatsheetShown = isGfmMode && value.length === 0;
-    const isCheatsheetModalButtonShown = isGfmMode && value.length > 0;
-    this.setState({ isSimpleCheatsheetShown, isCheatsheetModalButtonShown });
+    this.setState({ isSimpleCheatsheetShown });
+  }
+
+  markdownHelpButtonClickedHandler() {
+    if (this.props.onMarkdownHelpButtonClicked != null) {
+      this.props.onMarkdownHelpButtonClicked();
+    }
   }
 
   renderLoadingKeymapOverlay() {
@@ -533,38 +572,35 @@ export default class CodeMirrorEditor extends AbstractEditor {
       : '';
   }
 
-  renderSimpleCheatsheet() {
-    return <SimpleCheatsheet />;
-  }
-
-  renderCheatsheetModalBody() {
-    return <Cheatsheet />;
-  }
-
   renderCheatsheetModalButton() {
-    const showCheatsheetModal = () => {
-      this.setState({ isCheatsheetModalShown: true });
-    };
+    return (
+      <button type="button" className="btn-link gfm-cheatsheet-modal-link small" onClick={() => { this.markdownHelpButtonClickedHandler() }}>
+        <i className="icon-question" /> Markdown
+      </button>
+    );
+  }
 
-    const hideCheatsheetModal = () => {
-      this.setState({ isCheatsheetModalShown: false });
-    };
+  renderCheatsheetOverlay() {
+    const cheatsheetModalButton = this.renderCheatsheetModalButton();
 
     return (
-      <React.Fragment>
-        <Modal className="modal-gfm-cheatsheet" show={this.state.isCheatsheetModalShown} onHide={() => { hideCheatsheetModal() }}>
-          <Modal.Header closeButton>
-            <Modal.Title><i className="icon-fw icon-question" />Markdown Help</Modal.Title>
-          </Modal.Header>
-          <Modal.Body className="pt-1">
-            { this.renderCheatsheetModalBody() }
-          </Modal.Body>
-        </Modal>
-
-        <button type="button" className="btn-link gfm-cheatsheet-modal-link text-muted small mr-3" onClick={() => { showCheatsheetModal() }}>
-          <i className="icon-question" /> Markdown
-        </button>
-      </React.Fragment>
+      <div className="overlay overlay-gfm-cheatsheet mt-1 p-3">
+        { this.state.isSimpleCheatsheetShown
+          ? (
+            <div className="text-right">
+              {cheatsheetModalButton}
+              <div className="mb-2 d-none d-md-block">
+                <SimpleCheatsheet />
+              </div>
+            </div>
+          )
+          : (
+            <div className="mr-4 mb-2">
+              {cheatsheetModalButton}
+            </div>
+          )
+        }
+      </div>
     );
   }
 
@@ -635,107 +671,149 @@ export default class CodeMirrorEditor extends AbstractEditor {
     cm.focus();
   }
 
+  showGridEditorHandler() {
+    this.gridEditModal.current.show(geu.getGridHtml(this.getCodeMirror()));
+  }
+
+  showLinkEditHandler() {
+    this.linkEditModal.current.show(mlu.getMarkdownLink(this.getCodeMirror()));
+  }
+
   showHandsonTableHandler() {
-    this.handsontableModal.show(mtu.getMarkdownTable(this.getCodeMirror()));
+    this.handsontableModal.current.show(mtu.getMarkdownTable(this.getCodeMirror()));
+  }
+
+  showDrawioHandler() {
+    this.drawioModal.current.show(mdu.getMarkdownDrawioMxfile(this.getCodeMirror()));
   }
 
   getNavbarItems() {
     return [
       <Button
         key="nav-item-bold"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Bold"
         onClick={this.createReplaceSelectionHandler('**', '**')}
       >
-        <img src="/images/icons/editor/bold.svg" alt="icon-bold" height="13" />
+        <EditorIcon icon="Bold" />
       </Button>,
       <Button
         key="nav-item-italic"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Italic"
         onClick={this.createReplaceSelectionHandler('*', '*')}
       >
-        <img src="/images/icons/editor/italic.svg" alt="icon-italic" height="13" />
+        <EditorIcon icon="Italic" />
       </Button>,
       <Button
         key="nav-item-strikethrough"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Strikethrough"
         onClick={this.createReplaceSelectionHandler('~~', '~~')}
       >
-        <img src="/images/icons/editor/strikethrough.svg" alt="icon-strikethrough" height="13" />
+        <EditorIcon icon="Strikethrough" />
       </Button>,
       <Button
         key="nav-item-header"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Heading"
         onClick={this.makeHeaderHandler}
       >
-        <img src="/images/icons/editor/header.svg" alt="icon-header" height="13" />
+        <EditorIcon icon="Heading" />
       </Button>,
       <Button
         key="nav-item-code"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Inline Code"
         onClick={this.createReplaceSelectionHandler('`', '`')}
       >
-        <img src="/images/icons/editor/code.svg" alt="icon-code" height="13" />
+        <EditorIcon icon="InlineCode" />
       </Button>,
       <Button
         key="nav-item-quote"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Quote"
         onClick={this.createAddPrefixToEachLinesHandler('> ')}
       >
-        <img src="/images/icons/editor/quote.svg" alt="icon-quote" height="13" />
+        <EditorIcon icon="Quote" />
       </Button>,
       <Button
         key="nav-item-ul"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="List"
         onClick={this.createAddPrefixToEachLinesHandler('- ')}
       >
-        <img src="/images/icons/editor/list-ul.svg" alt="icon-list-ul" height="13" />
+        <EditorIcon icon="List" />
       </Button>,
       <Button
         key="nav-item-ol"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Numbered List"
         onClick={this.createAddPrefixToEachLinesHandler('1. ')}
       >
-        <img src="/images/icons/editor/list-ol.svg" alt="icon-list-ol" height="13" />
+        <EditorIcon icon="NumberedList" />
       </Button>,
       <Button
         key="nav-item-checkbox"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Check List"
         onClick={this.createAddPrefixToEachLinesHandler('- [ ] ')}
       >
-        <img src="/images/icons/editor/check.svg" alt="icon-check" height="13" />
+        <EditorIcon icon="CheckList" />
       </Button>,
       <Button
         key="nav-item-link"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Link"
-        onClick={this.createReplaceSelectionHandler('[', ']()')}
+        onClick={this.showLinkEditHandler}
       >
-        <img src="/images/icons/editor/link.svg" alt="icon-link" height="13" />
+        <EditorIcon icon="Link" />
       </Button>,
       <Button
         key="nav-item-image"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Image"
         onClick={this.createReplaceSelectionHandler('![', ']()')}
       >
-        <img src="/images/icons/editor/picture.svg" alt="icon-picture" height="13" />
+        <EditorIcon icon="Image" />
+      </Button>,
+      <Button
+        key="nav-item-grid"
+        color={null}
+        size="sm"
+        title="Grid"
+        onClick={this.showGridEditorHandler}
+      >
+        <EditorIcon icon="Grid" />
       </Button>,
       <Button
         key="nav-item-table"
-        bsSize="small"
+        color={null}
+        size="sm"
         title="Table"
         onClick={this.showHandsonTableHandler}
       >
-        <img src="/images/icons/editor/table.svg" alt="icon-table" height="13" />
+        <EditorIcon icon="Table" />
+      </Button>,
+      <Button
+        key="nav-item-drawio"
+        color={null}
+        bssize="small"
+        title="draw.io"
+        onClick={this.showDrawioHandler}
+      >
+        <EditorIcon icon="Drawio" />
       </Button>,
     ];
   }
@@ -765,7 +843,7 @@ export default class CodeMirrorEditor extends AbstractEditor {
             styleActiveLine: this.props.editorOptions.styleActiveLine,
             lineNumbers: this.props.lineNumbers,
             tabSize: 4,
-            indentUnit: 4,
+            indentUnit: this.props.indentSize,
             lineWrapping: true,
             autoRefresh: { force: true }, // force option is enabled by autorefresh.ext.js -- Yuki Takei
             autoCloseTags: true,
@@ -808,15 +886,26 @@ export default class CodeMirrorEditor extends AbstractEditor {
 
         { this.renderLoadingKeymapOverlay() }
 
-        <div className="overlay overlay-gfm-cheatsheet mt-1 p-3 pt-3">
-          { this.state.isSimpleCheatsheetShown && this.renderSimpleCheatsheet() }
-          { this.state.isCheatsheetModalButtonShown && this.renderCheatsheetModalButton() }
-        </div>
+        { this.renderCheatsheetOverlay() }
 
-        <HandsontableModal
-          ref={(c) => { this.handsontableModal = c }}
-          onSave={(table) => { return mtu.replaceFocusedMarkdownTableWithEditor(this.getCodeMirror(), table) }}
+        <GridEditModal
+          ref={this.gridEditModal}
+          onSave={(grid) => { return geu.replaceGridWithHtmlWithEditor(this.getCodeMirror(), grid) }}
         />
+        <LinkEditModal
+          ref={this.linkEditModal}
+          onSave={(linkText) => { return mlu.replaceFocusedMarkdownLinkWithEditor(this.getCodeMirror(), linkText) }}
+        />
+        <HandsontableModal
+          ref={this.handsontableModal}
+          onSave={(table) => { return mtu.replaceFocusedMarkdownTableWithEditor(this.getCodeMirror(), table) }}
+          ignoreAutoFormatting={this.props.editorOptions.ignoreMarkdownTableAutoFormatting}
+        />
+        <DrawioModal
+          ref={this.drawioModal}
+          onSave={(drawioData) => { return mdu.replaceFocusedDrawioWithEditor(this.getCodeMirror(), drawioData) }}
+        />
+
       </React.Fragment>
     );
   }
@@ -827,6 +916,7 @@ CodeMirrorEditor.propTypes = Object.assign({
   editorOptions: PropTypes.object.isRequired,
   emojiStrategy: PropTypes.object,
   lineNumbers: PropTypes.bool,
+  onMarkdownHelpButtonClicked: PropTypes.func,
 }, AbstractEditor.propTypes);
 CodeMirrorEditor.defaultProps = {
   lineNumbers: true,

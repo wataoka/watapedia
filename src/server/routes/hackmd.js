@@ -8,6 +8,26 @@ const axios = require('axios');
 
 const ApiResponse = require('../util/apiResponse');
 
+/**
+ * @swagger
+ *
+ *  components:
+ *    schemas:
+ *      Hackmd:
+ *        description: Hackmd
+ *        type: object
+ *        properties:
+ *          pageIdOnHackmd:
+ *            type: string
+ *            description: page ID on HackMD
+ *            example: qLnodHLxT6C3hVEVczvbDQ
+ *          revisionIdHackmdSynced:
+ *            $ref: '#/components/schemas/Revision/properties/_id'
+ *          hasDraftOnHackmd:
+ *            type: boolean
+ *            description: has draft on HackMD
+ *            example: false
+ */
 module.exports = function(crowi, app) {
   const Page = crowi.models.Page;
   const pageEvent = crowi.event('page');
@@ -19,11 +39,6 @@ module.exports = function(crowi, app) {
   // generate swig template
   let agentScriptContentTpl;
   let stylesScriptContentTpl;
-
-  // init 'saveOnHackmd' event
-  pageEvent.on('saveOnHackmd', (page) => {
-    crowi.getIo().sockets.emit('page:editingWithHackmd', { page });
-  });
 
   /**
    * GET /_hackmd/load-agent
@@ -106,6 +121,44 @@ module.exports = function(crowi, app) {
   };
 
   /**
+   * @swagger
+   *
+   *    /hackmd.integrate:
+   *      post:
+   *        tags: [Hackmd]
+   *        operationId: integrateHackmd
+   *        summary: /hackmd.integrate
+   *        description: Integrate hackmd
+   *        requestBody:
+   *          content:
+   *            application/json:
+   *              schema:
+   *                properties:
+   *                  pageId:
+   *                    $ref: '#/components/schemas/Page/properties/_id'
+   *                  page:
+   *                    $ref: '#/components/schemas/Hackmd'
+   *        responses:
+   *          200:
+   *            description: Succeeded to integrate HackMD.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *                    pageIdOnHackmd:
+   *                      $ref: '#/components/schemas/Hackmd/properties/pageIdOnHackmd'
+   *                    revisionIdHackmdSynced:
+   *                      $ref: '#/components/schemas/Hackmd/properties/revisionIdHackmdSynced'
+   *                    hasDraftOnHackmd:
+   *                      $ref: '#/components/schemas/Hackmd/properties/hasDraftOnHackmd'
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
+   */
+  /**
    * POST /_api/hackmd.integrate
    *
    * Create page on HackMD and start to integrate
@@ -138,8 +191,8 @@ module.exports = function(crowi, app) {
 
     const { status, headers } = hackmdResponse;
 
-    // validate HackMD/CodiMD specific header
-    if (headers['codimd-version'] == null && headers['hackmd-version'] == null) {
+    // validate HackMD/CodiMD/HedgeDoc specific header
+    if (headers['codimd-version'] == null && headers['hackmd-version'] == null && headers['hedgedoc-version'] == null) {
       const message = 'Connecting to a non-HackMD server.';
       logger.error(message);
       return res.json(ApiResponse.error(message));
@@ -181,6 +234,44 @@ module.exports = function(crowi, app) {
   };
 
   /**
+   * @swagger
+   *
+   *    /hackmd.discard:
+   *      post:
+   *        tags: [Hackmd]
+   *        operationId: discardHackmd
+   *        summary: /hackmd.discard
+   *        description: Discard hackmd
+   *        requestBody:
+   *          content:
+   *            application/json:
+   *              schema:
+   *                properties:
+   *                  pageId:
+   *                    $ref: '#/components/schemas/Page/properties/_id'
+   *                  page:
+   *                    $ref: '#/components/schemas/Hackmd'
+   *        responses:
+   *          200:
+   *            description: Succeeded to integrate HackMD.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *                    pageIdOnHackmd:
+   *                      $ref: '#/components/schemas/Hackmd/properties/pageIdOnHackmd'
+   *                    revisionIdHackmdSynced:
+   *                      $ref: '#/components/schemas/Hackmd/properties/revisionIdHackmdSynced'
+   *                    hasDraftOnHackmd:
+   *                      $ref: '#/components/schemas/Hackmd/properties/hasDraftOnHackmd'
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
+   */
+  /**
    * POST /_api/hackmd.discard
    *
    * Create page on HackMD and start to integrate
@@ -206,6 +297,38 @@ module.exports = function(crowi, app) {
     }
   };
 
+  /**
+   * @swagger
+   *
+   *    /hackmd.saveOnHackmd:
+   *      post:
+   *        tags: [Hackmd]
+   *        operationId: saveOnHackmd
+   *        summary: /hackmd.saveOnHackmd
+   *        description: Receive when save operation triggered on HackMD
+   *        requestBody:
+   *          content:
+   *            application/json:
+   *              schema:
+   *                properties:
+   *                  pageId:
+   *                    $ref: '#/components/schemas/Page/properties/_id'
+   *                  page:
+   *                    $ref: '#/components/schemas/Hackmd'
+   *        responses:
+   *          200:
+   *            description: Succeeded to receive when save operation triggered on HackMD.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
+   */
   /**
    * POST /_api/hackmd.saveOnHackmd
    *

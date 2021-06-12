@@ -1,4 +1,4 @@
-module.exports = function(crowi, app) {
+module.exports = function(crowi) {
   const logger = require('@alias/logger')('growi:routes:installer');
   const path = require('path');
   const fs = require('graceful-fs');
@@ -12,33 +12,35 @@ module.exports = function(crowi, app) {
   const actions = {};
 
   async function initSearchIndex() {
-    const search = crowi.getSearcher();
-    if (search == null) {
+    const { searchService } = crowi;
+    if (!searchService.isReachable) {
       return;
     }
 
-    await search.deleteIndex();
-    await search.buildIndex();
-    await search.addAllPages();
+    await searchService.rebuildIndex();
+  }
+
+  async function createPage(filePath, pagePath, owner, lang) {
+    try {
+      const markdown = fs.readFileSync(filePath);
+      return Page.create(pagePath, markdown, owner, {});
+    }
+    catch (err) {
+      logger.error(`Failed to create ${pagePath}`, err);
+    }
   }
 
   async function createInitialPages(owner, lang) {
     const promises = [];
 
     // create portal page for '/'
-    const welcomeMarkdownPath = path.join(crowi.localeDir, lang, 'welcome.md');
-    const welcomeMarkdown = fs.readFileSync(welcomeMarkdownPath);
-    promises.push(Page.create('/', welcomeMarkdown, owner, {}));
+    promises.push(createPage(path.join(crowi.localeDir, lang, 'welcome.md'), '/', owner, lang));
 
-    // create /Sandbox
-    const sandboxMarkdownPath = path.join(crowi.localeDir, lang, 'sandbox.md');
-    const sandboxMarkdown = fs.readFileSync(sandboxMarkdownPath);
-    promises.push(Page.create('/Sandbox', sandboxMarkdown, owner, {}));
-
-    // create /Sandbox/Bootstrap3
-    const bs3MarkdownPath = path.join(crowi.localeDir, 'en-US', 'sandbox-bootstrap3.md');
-    const bs3Markdown = fs.readFileSync(bs3MarkdownPath);
-    promises.push(Page.create('/Sandbox/Bootstrap3', bs3Markdown, owner, {}));
+    // create /Sandbox/*
+    promises.push(createPage(path.join(crowi.localeDir, lang, 'sandbox.md'), '/Sandbox', owner, lang));
+    promises.push(createPage(path.join(crowi.localeDir, lang, 'sandbox-bootstrap4.md'), '/Sandbox/Bootstrap4', owner, lang));
+    promises.push(createPage(path.join(crowi.localeDir, lang, 'sandbox-diagrams.md'), '/Sandbox/Diagrams', owner, lang));
+    promises.push(createPage(path.join(crowi.localeDir, lang, 'sandbox-math.md'), '/Sandbox/Math', owner, lang));
 
     await Promise.all(promises);
 
@@ -65,33 +67,37 @@ module.exports = function(crowi, app) {
     const username = registerForm.username;
     const email = registerForm.email;
     const password = registerForm.password;
-    const language = registerForm['app:globalLang'] || 'en-US';
+    const language = registerForm['app:globalLang'] || 'en_US';
 
     await appService.initDB(language);
 
     // create first admin user
+    // TODO: with transaction
     let adminUser;
     try {
       adminUser = await User.createUser(name, username, email, password, language);
       await adminUser.asyncMakeAdmin();
     }
     catch (err) {
-      req.form.errors.push(`管理ユーザーの作成に失敗しました。${err.message}`);
+      req.form.errors.push(req.t('message.failed_to_create_admin_user', { errMessage: err.message }));
       return res.render('installer');
     }
     // create initial pages
     await createInitialPages(adminUser, language);
-    // init plugins
-    crowi.pluginService.autoDetectAndLoadPlugins();
-    // setup routes
-    crowi.setupRoutesAtLast(app);
+
+    appService.setupAfterInstall();
+    appService.publishPostInstallationMessage();
 
     // login with passport
     req.logIn(adminUser, (err) => {
-      if (err) { return next() }
+      if (err) {
+        req.flash('successMessage', req.t('message.complete_to_install1'));
+        req.session.redirectTo = '/';
+        return res.redirect('/login');
+      }
 
-      req.flash('successMessage', 'GROWI のインストールが完了しました！はじめに、このページで各種設定を確認してください。');
-      return res.redirect('/admin/app');
+      req.flash('successMessage', req.t('message.complete_to_install2'));
+      return res.redirect('/');
     });
   };
 

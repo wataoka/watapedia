@@ -1,12 +1,15 @@
-const debug = require('debug')('growi:lib:middlewares');
+// don't add any more middlewares to this file.
+// all new middlewares should be an independent file under /server/middlewares
+// eslint-disable-next-line no-unused-vars
 const logger = require('@alias/logger')('growi:lib:middlewares');
+
 const { formatDistanceStrict } = require('date-fns');
 const pathUtils = require('growi-commons').pathUtils;
 const md5 = require('md5');
 const entities = require('entities');
 
-module.exports = (crowi, app) => {
-  const { configManager, appService } = crowi;
+module.exports = (crowi) => {
+  const { configManager } = crowi;
 
   const middlewares = {};
 
@@ -22,33 +25,9 @@ module.exports = (crowi, app) => {
     };
   };
 
-  middlewares.loginCheckerForPassport = function(req, res, next) {
-    res.locals.user = req.user;
-    next();
-  };
-
-  middlewares.csrfVerify = function(req, res, next) {
-    const token = req.body._csrf || req.query._csrf || null;
-    const csrfKey = (req.session && req.session.id) || 'anon';
-
-    debug('req.skipCsrfVerify', req.skipCsrfVerify);
-    if (req.skipCsrfVerify) {
-      debug('csrf verify skipped');
-      return next();
-    }
-
-    if (crowi.getTokens().verify(csrfKey, token)) {
-      debug('csrf successfully verified');
-      return next();
-    }
-
-    logger.warn('csrf verification failed. return 403', csrfKey, token);
-    return res.sendStatus(403);
-  };
-
   middlewares.swigFunctions = function() {
     return function(req, res, next) {
-      require('../util/swigFunctions')(crowi, app, req, res.locals);
+      require('../util/swigFunctions')(crowi, req, res.locals);
       next();
     };
   };
@@ -117,7 +96,7 @@ module.exports = (crowi, app) => {
       swig.setFilter('datetz', (input, format) => {
         // timezone
         const swigFilters = require('swig-templates/lib/filters');
-        return swigFilters.date(input, format, app.get('tzoffset'));
+        return swigFilters.date(input, format, crowi.appService.getTzoffset());
       });
 
       swig.setFilter('dateDistance', (input) => {
@@ -174,116 +153,13 @@ module.exports = (crowi, app) => {
     };
   };
 
-  middlewares.adminRequired = function(req, res, next) {
-    if (req.user != null && (req.user instanceof Object) && '_id' in req.user) {
-      if (req.user.admin) {
-        next();
-        return;
-      }
-      return res.redirect('/');
-    }
-    return res.redirect('/login');
-  };
-
-  /**
-   * require login handler
-   *
-   * @param {boolean} isStrictly whethere strictly restricted (default true)
-   */
-  middlewares.loginRequired = function(isStrictly = true) {
-    return function(req, res, next) {
-
-      // when the route is not strictly restricted
-      if (!isStrictly) {
-        // when allowed to read
-        if (crowi.aclService.isGuestAllowedToRead()) {
-          logger.debug('Allowed to read: ', req.path);
-          return next();
-        }
-      }
-
-      const User = crowi.model('User');
-
-      // check the user logged in
-      if (req.user != null && (req.user instanceof Object) && '_id' in req.user) {
-        if (req.user.status === User.STATUS_ACTIVE) {
-          // Active の人だけ先に進める
-          return next();
-        }
-        if (req.user.status === User.STATUS_REGISTERED) {
-          return res.redirect('/login/error/registered');
-        }
-        if (req.user.status === User.STATUS_SUSPENDED) {
-          return res.redirect('/login/error/suspended');
-        }
-        if (req.user.status === User.STATUS_INVITED) {
-          return res.redirect('/login/invited');
-        }
-      }
-
-      // is api path
-      const path = req.path || '';
-      if (path.match(/^\/_api\/.+$/)) {
-        return res.sendStatus(403);
-      }
-
-      req.session.jumpTo = req.originalUrl;
-      return res.redirect('/login');
-    };
-  };
-
-  middlewares.accessTokenParser = function(req, res, next) {
-    // TODO: comply HTTP header of RFC6750 / Authorization: Bearer
-    const accessToken = req.query.access_token || req.body.access_token || null;
-    if (!accessToken) {
-      return next();
-    }
-
-    const User = crowi.model('User');
-
-    debug('accessToken is', accessToken);
-    User.findUserByApiToken(accessToken)
-      .then((userData) => {
-        req.user = userData;
-        req.skipCsrfVerify = true;
-        debug('Access token parsed: skipCsrfVerify');
-
-        next();
-      })
-      .catch((err) => {
-        next();
-      });
-  };
-
-  // this is for Installer
-  middlewares.applicationNotInstalled = async function(req, res, next) {
-    const isInstalled = await appService.isDBInitialized();
-
-    if (isInstalled) {
-      req.flash('errorMessage', 'Application already installed.');
-      return res.redirect('admin'); // admin以外はadminRequiredで'/'にリダイレクトされる
-    }
-
-    return next();
-  };
-
-  middlewares.applicationInstalled = async function(req, res, next) {
-    const isInstalled = await appService.isDBInitialized();
-
-    if (!isInstalled) {
-      return res.redirect('/installer');
-    }
-
-    return next();
-  };
-
   middlewares.awsEnabled = function() {
     return function(req, res, next) {
-      if ((configManager.getConfig('crowi', 'aws:region') !== '' || this.configManager.getConfig('crowi', 'aws:customEndpoint') !== '')
-          && configManager.getConfig('crowi', 'aws:bucket') !== ''
-          && configManager.getConfig('crowi', 'aws:accessKeyId') !== ''
-          && configManager.getConfig('crowi', 'aws:secretAccessKey') !== '') {
-        req.flash('globalError', 'AWS settings required to use this function. Please ask the administrator.');
+      if ((configManager.getConfig('crowi', 'aws:s3Region') !== '' || this.configManager.getConfig('crowi', 'aws:s3CustomEndpoint') !== '')
+          && configManager.getConfig('crowi', 'aws:s3Bucket') !== ''
+          && configManager.getConfig('crowi', 'aws:s3AccessKeyId') !== ''
+          && configManager.getConfig('crowi', 'aws:s3SecretAccessKey') !== '') {
+        req.flash('globalError', req.t('message.aws_sttings_required'));
         return res.redirect('/');
       }
 

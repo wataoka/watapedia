@@ -17,7 +17,7 @@ describe('User', () => {
       username: 'usertest',
       email: 'usertest@example.com',
       password: 'usertestpass',
-      lang: 'en',
+      lang: 'en_US',
     });
 
     done();
@@ -25,14 +25,16 @@ describe('User', () => {
 
   describe('Create and Find.', () => {
     describe('The user', () => {
+      /* eslint-disable jest/no-test-callback */
       test('should created with createUserByEmailAndPassword', (done) => {
-        User.createUserByEmailAndPassword('Example2 for User Test', 'usertest2', 'usertest2@example.com', 'usertest2pass', 'en', (err, userData) => {
+        User.createUserByEmailAndPassword('Example2 for User Test', 'usertest2', 'usertest2@example.com', 'usertest2pass', 'en_US', (err, userData) => {
           expect(err).toBeNull();
           expect(userData).toBeInstanceOf(User);
           expect(userData.name).toBe('Example2 for User Test');
           done();
         });
       });
+      /* eslint-enable jest/no-test-callback */
 
       test('should be found by findUserByUsername', async() => {
         const user = await User.findUserByUsername('usertest');
@@ -40,35 +42,24 @@ describe('User', () => {
         expect(user.name).toBe('Example for User Test');
       });
 
-      test('should be found by findUsersByPartOfEmail', async() => {
-        const users = await User.findUsersByPartOfEmail('usert', {});
-        expect(users).toBeInstanceOf(Array);
-        expect(users.length).toBe(2);
-        expect(users[0]).toBeInstanceOf(User);
-        expect(users[1]).toBeInstanceOf(User);
-      });
     });
   });
 
   describe('User Utilities', () => {
     describe('Get username from path', () => {
-      test('found', (done) => {
+      test('found', () => {
         let username = null;
         username = User.getUsernameByPath('/user/sotarok');
         expect(username).toEqual('sotarok');
 
         username = User.getUsernameByPath('/user/some.user.name12/'); // with slash
         expect(username).toEqual('some.user.name12');
-
-        done();
       });
 
-      test('not found', (done) => {
+      test('not found', () => {
         let username = null;
         username = User.getUsernameByPath('/the/page/is/not/related/to/user/page');
         expect(username).toBeNull();
-
-        done();
       });
     });
   });

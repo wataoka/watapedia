@@ -14,13 +14,12 @@ require('jquery-ui/ui/widgets/resizable');
 export default class CustomHeaderEditor extends React.Component {
 
   render() {
-    // get initial value from inputElem
-    const value = this.props.inputElem.value;
 
     return (
       <CodeMirror
-        value={value}
+        value={this.props.value}
         autoFocus
+        detach
         options={{
           mode: 'htmlmixed',
           lineNumbers: true,
@@ -41,7 +40,7 @@ export default class CustomHeaderEditor extends React.Component {
           });
         }}
         onChange={(editor, data, value) => {
-          this.props.inputElem.value = value;
+          this.props.onChange(value);
         }}
       />
     );
@@ -50,5 +49,6 @@ export default class CustomHeaderEditor extends React.Component {
 }
 
 CustomHeaderEditor.propTypes = {
-  inputElem: PropTypes.object.isRequired,
+  value: PropTypes.string.isRequired,
+  onChange: PropTypes.func.isRequired,
 };
