@@ -1,15 +1,16 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import PropTypes from 'prop-types';
 import { withTranslation } from 'react-i18next';
 
-import * as toastr from 'toastr';
+import { toastSuccess, toastError } from '../../util/apiNotification';
 
-import { createSubscribedElement } from '../UnstatedUtils';
+import { withUnstatedContainers } from '../UnstatedUtils';
 import AppContainer from '../../services/AppContainer';
 import PageContainer from '../../services/PageContainer';
 import EditorContainer from '../../services/EditorContainer';
 
-import TagEditor from './TagEditor';
+import RenderTagLabels from './RenderTagLabels';
+import TagEditModal from './TagEditModal';
 
 class TagLabels extends React.Component {
 
@@ -17,118 +18,87 @@ class TagLabels extends React.Component {
     super(props);
 
     this.state = {
-      showTagEditor: false,
+      isTagEditModalShown: false,
     };
 
-    this.showEditor = this.showEditor.bind(this);
+    this.openEditorModal = this.openEditorModal.bind(this);
+    this.closeEditorModal = this.closeEditorModal.bind(this);
     this.tagsUpdatedHandler = this.tagsUpdatedHandler.bind(this);
   }
 
   /**
    * @return tags data
-   *   1. pageContainer.state.tags if editorMode is null
-   *   2. editorContainer.state.tags if editorMode is not null
+   *   1. pageContainer.state.tags if editorMode is view
+   *   2. editorContainer.state.tags if editorMode is edit
    */
-  getEditTargetData() {
-    const { editorMode } = this.props.appContainer.state;
-    return (editorMode == null)
-      ? this.props.pageContainer.state.tags
-      : this.props.editorContainer.state.tags;
+  getTagData() {
+    const { editorContainer, pageContainer, editorMode } = this.props;
+    return (editorMode === 'edit') ? editorContainer.state.tags : pageContainer.state.tags;
   }
 
-  showEditor() {
-    this.tagEditor.show(this.getEditTargetData());
+  openEditorModal() {
+    this.setState({ isTagEditModalShown: true });
   }
 
-  async tagsUpdatedHandler(tags) {
-    const { appContainer, editorContainer } = this.props;
-    const { editorMode } = appContainer.state;
+  closeEditorModal() {
+    this.setState({ isTagEditModalShown: false });
+  }
 
-    // post api request and update tags
-    if (editorMode == null) {
-      const { pageContainer } = this.props;
+  async tagsUpdatedHandler(newTags) {
+    const {
+      appContainer, editorContainer, pageContainer, editorMode,
+    } = this.props;
 
-      try {
-        const { pageId } = pageContainer.state;
-        await appContainer.apiPost('/tags.update', { pageId, tags });
+    const { pageId } = pageContainer.state;
 
-        // update pageContainer.state
-        pageContainer.setState({ tags });
-        editorContainer.setState({ tags });
-
-        this.apiSuccessHandler();
-      }
-      catch (err) {
-        this.apiErrorHandler(err);
-        return;
-      }
+    // It will not be reflected in the DB until the page is refreshed
+    if (editorMode === 'edit') {
+      return editorContainer.setState({ tags: newTags });
     }
-    // only update tags in editorContainer
-    else {
+
+    try {
+      const { tags } = await appContainer.apiPost('/tags.update', { pageId, tags: newTags });
+
+      // update pageContainer.state
+      pageContainer.setState({ tags });
+      // update editorContainer.state
       editorContainer.setState({ tags });
+
+      toastSuccess('updated tags successfully');
+    }
+    catch (err) {
+      toastError(err, 'fail to update tags');
     }
   }
 
-  apiSuccessHandler() {
-    toastr.success(undefined, 'updated tags successfully', {
-      closeButton: true,
-      progressBar: true,
-      newestOnTop: false,
-      showDuration: '100',
-      hideDuration: '100',
-      timeOut: '1200',
-      extendedTimeOut: '150',
-    });
-  }
-
-  apiErrorHandler(err) {
-    toastr.error(err.message, 'Error occured', {
-      closeButton: true,
-      progressBar: true,
-      newestOnTop: false,
-      showDuration: '100',
-      hideDuration: '100',
-      timeOut: '3000',
-    });
-  }
 
   render() {
-    const { t } = this.props;
-    const { pageId } = this.props.pageContainer.state;
-
-    const tags = this.getEditTargetData();
-
-    const tagElements = tags.map((tag) => {
-      return (
-        <span key={`${pageId}_${tag}`} className="text-muted">
-          <i className="tag-icon icon-tag mr-1"></i>
-          <a className="tag-name mr-2" href={`/_search?q=tag:${tag}`} key={`${pageId}_${tag}_link`}>{tag}</a>
-        </span>
-      );
-    });
+    const tags = this.getTagData();
+    const { appContainer } = this.props;
 
     return (
-      <div className={`tag-viewer ${pageId ? 'existed-page' : 'new-page'}`}>
-        {tags.length === 0 && (
-          <a className="btn btn-link btn-edit-tags no-tags p-0" onClick={this.showEditor}>
-            { t('Add tags for this page') } <i className="manage-tags ml-2 icon-plus"></i>
-          </a>
-        )}
-        {tagElements}
-        {tags.length > 0 && (
-          <a className="btn btn-link btn-edit-tags p-0" onClick={this.showEditor}>
-            <i className="manage-tags ml-2 icon-plus"></i> { t('Edit tags for this page') }
-          </a>
-        )}
+      <>
 
-        <TagEditor
-          ref={(c) => { this.tagEditor = c }}
+        <form className="grw-tag-labels form-inline">
+          <i className="tag-icon icon-tag mr-2"></i>
+          <Suspense fallback={<span className="grw-tag-label badge badge-secondary">―</span>}>
+            <RenderTagLabels
+              tags={tags}
+              openEditorModal={this.openEditorModal}
+              isGuestUser={appContainer.isGuestUser}
+            />
+          </Suspense>
+        </form>
+
+        <TagEditModal
+          tags={tags}
+          isOpen={this.state.isTagEditModalShown}
+          onClose={this.closeEditorModal}
           appContainer={this.props.appContainer}
-          show={this.state.showTagEditor}
           onTagsUpdated={this.tagsUpdatedHandler}
-        >
-        </TagEditor>
-      </div>
+        />
+
+      </>
     );
   }
 
@@ -137,16 +107,16 @@ class TagLabels extends React.Component {
 /**
  * Wrapper component for using unstated
  */
-const TagLabelsWrapper = (props) => {
-  return createSubscribedElement(TagLabels, props, [AppContainer, PageContainer, EditorContainer]);
-};
-
+const TagLabelsWrapper = withUnstatedContainers(TagLabels, [AppContainer, PageContainer, EditorContainer]);
 
 TagLabels.propTypes = {
   t: PropTypes.func.isRequired, // i18next
+
   appContainer: PropTypes.instanceOf(AppContainer).isRequired,
   pageContainer: PropTypes.instanceOf(PageContainer).isRequired,
   editorContainer: PropTypes.instanceOf(EditorContainer).isRequired,
+
+  editorMode: PropTypes.string.isRequired,
 };
 
 export default withTranslation()(TagLabelsWrapper);

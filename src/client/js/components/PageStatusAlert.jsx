@@ -6,7 +6,7 @@ import { withTranslation } from 'react-i18next';
 import AppContainer from '../services/AppContainer';
 import PageContainer from '../services/PageContainer';
 
-import { createSubscribedElement } from './UnstatedUtils';
+import { withUnstatedContainers } from './UnstatedUtils';
 
 /**
  *
@@ -25,71 +25,64 @@ class PageStatusAlert extends React.Component {
     this.state = {
     };
 
-    this.renderSomeoneEditingAlert = this.renderSomeoneEditingAlert.bind(this);
-    this.renderDraftExistsAlert = this.renderDraftExistsAlert.bind(this);
-    this.renderUpdatedAlert = this.renderUpdatedAlert.bind(this);
-  }
-
-  componentWillMount() {
-    this.props.appContainer.registerComponentInstance('PageStatusAlert', this);
+    this.getContentsForSomeoneEditingAlert = this.getContentsForSomeoneEditingAlert.bind(this);
+    this.getContentsForDraftExistsAlert = this.getContentsForDraftExistsAlert.bind(this);
+    this.getContentsForUpdatedAlert = this.getContentsForUpdatedAlert.bind(this);
   }
 
   refreshPage() {
     window.location.reload();
   }
 
-  renderSomeoneEditingAlert() {
-    return (
-      <div className="alert-hackmd-someone-editing myadmin-alert alert-success myadmin-alert-bottom alertbottom2">
+  getContentsForSomeoneEditingAlert() {
+    const { t } = this.props;
+    return [
+      ['bg-success', 'd-hackmd-none'],
+      <>
         <i className="icon-fw icon-people"></i>
-        Someone editing this page on HackMD
-        &nbsp;
-        <i className="fa fa-angle-double-right"></i>
-        &nbsp;
-        <a href="#hackmd">
-          Open HackMD Editor
-        </a>
-      </div>
-    );
+        {t('hackmd.someone_editing')}
+      </>,
+      <a href="#hackmd" className="btn btn-outline-white">
+        <i className="fa fa-fw fa-file-text-o mr-1"></i>
+        Open HackMD Editor
+      </a>,
+    ];
   }
 
-  renderDraftExistsAlert(isRealtime) {
-    return (
-      <div className="alert-hackmd-draft-exists myadmin-alert alert-success myadmin-alert-bottom alertbottom2">
+  getContentsForDraftExistsAlert(isRealtime) {
+    const { t } = this.props;
+    return [
+      ['bg-success', 'd-hackmd-none'],
+      <>
         <i className="icon-fw icon-pencil"></i>
-        This page has a draft on HackMD
-        &nbsp;
-        <i className="fa fa-angle-double-right"></i>
-        &nbsp;
-        <a href="#hackmd">
-          Open HackMD Editor
-        </a>
-      </div>
-    );
+        {t('hackmd.this_page_has_draft')}
+      </>,
+      <a href="#hackmd" className="btn btn-outline-white">
+        <i className="fa fa-fw fa-file-text-o mr-1"></i>
+        Open HackMD Editor
+      </a>,
+    ];
   }
 
-  renderUpdatedAlert() {
+  getContentsForUpdatedAlert() {
     const { t } = this.props;
     const label1 = t('edited this page');
     const label2 = t('Load latest');
 
-    return (
-      <div className="alert-revision-outdated myadmin-alert alert-warning myadmin-alert-bottom alertbottom2">
+    return [
+      ['bg-warning'],
+      <>
         <i className="icon-fw icon-bulb"></i>
         {this.props.pageContainer.state.lastUpdateUsername} {label1}
-        &nbsp;
-        <i className="fa fa-angle-double-right"></i>
-        &nbsp;
-        <a href="#" onClick={this.refreshPage}>
-          {label2}
-        </a>
-      </div>
-    );
+      </>,
+      <a href="#" className="btn btn-outline-white" onClick={this.refreshPage}>
+        <i className="icon-fw icon-reload mr-1"></i>
+        {label2}
+      </a>,
+    ];
   }
 
   render() {
-    let content = <React.Fragment></React.Fragment>;
-
     const {
       revisionId, revisionIdHackmdSynced, remoteRevisionId, hasDraftOnHackmd, isHackmdDraftUpdatingInRealtime,
     } = this.props.pageContainer.state;
@@ -97,20 +90,39 @@ class PageStatusAlert extends React.Component {
     const isRevisionOutdated = revisionId !== remoteRevisionId;
     const isHackmdDocumentOutdated = revisionIdHackmdSynced !== remoteRevisionId;
 
+    let getContentsFunc = null;
+
     // when remote revision is newer than both
     if (isHackmdDocumentOutdated && isRevisionOutdated) {
-      content = this.renderUpdatedAlert();
+      getContentsFunc = this.getContentsForUpdatedAlert;
     }
     // when someone editing with HackMD
     else if (isHackmdDraftUpdatingInRealtime) {
-      content = this.renderSomeoneEditingAlert();
+      getContentsFunc = this.getContentsForSomeoneEditingAlert;
     }
     // when the draft of HackMD is newest
     else if (hasDraftOnHackmd) {
-      content = this.renderDraftExistsAlert();
+      getContentsFunc = this.getContentsForDraftExistsAlert;
+    }
+    // do not render anything
+    else {
+      return null;
     }
 
-    return content;
+    const [additionalClasses, label, btn] = getContentsFunc();
+
+    return (
+      <div className={`card grw-page-status-alert text-white fixed-bottom animated fadeInUp faster ${additionalClasses.join(' ')}`}>
+        <div className="card-body">
+          <p className="card-text grw-card-label-container">
+            {label}
+          </p>
+          <p className="card-text grw-card-btn-container">
+            {btn}
+          </p>
+        </div>
+      </div>
+    );
   }
 
 }
@@ -118,9 +130,7 @@ class PageStatusAlert extends React.Component {
 /**
  * Wrapper component for using unstated
  */
-const PageStatusAlertWrapper = (props) => {
-  return createSubscribedElement(PageStatusAlert, props, [AppContainer, PageContainer]);
-};
+const PageStatusAlertWrapper = withUnstatedContainers(PageStatusAlert, [AppContainer, PageContainer]);
 
 PageStatusAlert.propTypes = {
   t: PropTypes.func.isRequired, // i18next

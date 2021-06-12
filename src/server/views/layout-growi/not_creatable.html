@@ -1,21 +1,16 @@
 {% extends 'base/layout.html' %}
 
 
-{% block content_header %}
-  {% include 'widget/header.html' with {isCreatable: false} %}
-{% endblock %}
-
-
 {% block content_main_before %}
-  {% include '../widget/page_alerts.html' %}
+  <div class="container-lg">
+    {% include '../widget/page_alerts.html' %}
+  </div>
 {% endblock %}
 
 
 {% block content_main %}
-  <div class="row">
-    <div class="col-lg-10 col-md-9">
-      {% include '../widget/not_creatable_content.html' %}
-    </div> {# /.col- #}
+  <div class="container-lg">
+    {% include '../widget/not_creatable_content.html' %}
   </div>
 {% endblock %}
 

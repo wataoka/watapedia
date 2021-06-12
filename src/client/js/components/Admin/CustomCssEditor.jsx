@@ -16,13 +16,12 @@ require('jquery-ui/ui/widgets/resizable');
 export default class CustomCssEditor extends React.Component {
 
   render() {
-    // get initial value from inputElem
-    const value = this.props.inputElem.value;
 
     return (
       <CodeMirror
-        value={value}
+        value={this.props.value}
         autoFocus
+        detach
         options={{
           mode: 'css',
           lineNumbers: true,
@@ -43,7 +42,7 @@ export default class CustomCssEditor extends React.Component {
           });
         }}
         onChange={(editor, data, value) => {
-          this.props.inputElem.value = value;
+          this.props.onChange(value);
         }}
       />
     );
@@ -52,5 +51,6 @@ export default class CustomCssEditor extends React.Component {
 }
 
 CustomCssEditor.propTypes = {
-  inputElem: PropTypes.object.isRequired,
+  value: PropTypes.string.isRequired,
+  onChange: PropTypes.func.isRequired,
 };

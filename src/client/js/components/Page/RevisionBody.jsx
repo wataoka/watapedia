@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 
 import { debounce } from 'throttle-debounce';
 
-export default class RevisionBody extends React.Component {
+export default class RevisionBody extends React.PureComponent {
 
   constructor(props) {
     super(props);
@@ -35,7 +35,19 @@ export default class RevisionBody extends React.Component {
 
   renderMathJax() {
     const MathJax = window.MathJax;
-    MathJax.Hub.Queue(['Typeset', MathJax.Hub, this.element]);
+    // Workaround MathJax Rendering (Errors still occur, but MathJax can be rendered)
+    //
+    // Reason:
+    //   Addition of draw.io Integration causes initialization conflict between MathJax of draw.io and MathJax of GROWI.
+    //   So, before MathJax is initialized, execute renderMathJaxWithDebounce again.
+    //   Avoiding initialization of MathJax of draw.io solves the problem.
+    //   refs: https://github.com/jgraph/drawio/pull/831
+    if (MathJax != null) {
+      MathJax.typesetPromise([this.element]);
+    }
+    else {
+      this.renderMathJaxWithDebounce();
+    }
   }
 
   generateInnerHtml(html) {
@@ -53,6 +65,7 @@ export default class RevisionBody extends React.Component {
           }
         }}
         className={`wiki ${additionalClassName}`}
+        // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={this.generateInnerHtml(this.props.html)}
       />
     );

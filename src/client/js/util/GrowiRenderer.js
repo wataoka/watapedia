@@ -2,6 +2,7 @@ import MarkdownIt from 'markdown-it';
 
 import Linker from './PreProcessor/Linker';
 import CsvToTable from './PreProcessor/CsvToTable';
+import EasyGrid from './PreProcessor/EasyGrid';
 import XssFilter from './PreProcessor/XssFilter';
 
 import EmojiConfigurer from './markdown-it/emoji';
@@ -14,6 +15,7 @@ import TableConfigurer from './markdown-it/table';
 import TaskListsConfigurer from './markdown-it/task-lists';
 import TocAndAnchorConfigurer from './markdown-it/toc-and-anchor';
 import BlockdiagConfigurer from './markdown-it/blockdiag';
+import DrawioViewerConfigurer from './markdown-it/drawio-viewer';
 import TableWithHandsontableButtonConfigurer from './markdown-it/table-with-handsontable-button';
 import HeaderWithEditLinkConfigurer from './markdown-it/header-with-edit-link';
 
@@ -36,6 +38,7 @@ export default class GrowiRenderer {
     }
     else {
       this.preProcessors = [
+        new EasyGrid(appContainer),
         new Linker(appContainer),
         new CsvToTable(appContainer),
         new XssFilter(appContainer),
@@ -67,6 +70,7 @@ export default class GrowiRenderer {
       new HeaderConfigurer(appContainer),
       new EmojiConfigurer(appContainer),
       new MathJaxConfigurer(appContainer),
+      new DrawioViewerConfigurer(appContainer),
       new PlantUMLConfigurer(appContainer),
       new BlockdiagConfigurer(appContainer),
     ];

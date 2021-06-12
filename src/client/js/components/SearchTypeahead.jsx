@@ -6,9 +6,9 @@ import { AsyncTypeahead } from 'react-bootstrap-typeahead';
 
 import UserPicture from './User/UserPicture';
 import PageListMeta from './PageList/PageListMeta';
-import PagePath from './PageList/PagePath';
+import PagePathLabel from './PageList/PagePathLabel';
 import AppContainer from '../services/AppContainer';
-import { createSubscribedElement } from './UnstatedUtils';
+import { withUnstatedContainers } from './UnstatedUtils';
 
 class SearchTypeahead extends React.Component {
 
@@ -24,12 +24,14 @@ class SearchTypeahead extends React.Component {
     };
 
     this.restoreInitialData = this.restoreInitialData.bind(this);
+    this.clearKeyword = this.clearKeyword.bind(this);
+    this.changeKeyword = this.changeKeyword.bind(this);
     this.search = this.search.bind(this);
     this.onInputChange = this.onInputChange.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
     this.dispatchSubmit = this.dispatchSubmit.bind(this);
     this.getEmptyLabel = this.getEmptyLabel.bind(this);
-    this.getRestoreFormButton = this.getRestoreFormButton.bind(this);
+    this.getResetFormButton = this.getResetFormButton.bind(this);
     this.renderMenuItemChildren = this.renderMenuItemChildren.bind(this);
     this.getTypeahead = this.getTypeahead.bind(this);
   }
@@ -42,20 +44,30 @@ class SearchTypeahead extends React.Component {
   }
 
   componentDidMount() {
-    // **MEMO** This doesn't work at this time -- 2019.05.13 Yuki Takei
-    // It is needed to use Modal component of react-bootstrap when showing Move/Duplicate/CreateNewPage modals
-    // this.typeahead.getInstance().focus();
   }
 
   componentWillUnmount() {
   }
 
   /**
-   * Initialize keyword
+   * Initialize keywordyword
    */
   restoreInitialData() {
+    this.changeKeyword(this.props.keywordOnInit);
+  }
+
+  /**
+   * clear keyword
+   */
+  clearKeyword(text) {
+    this.changeKeyword('');
+  }
+
+  /**
+   * change keyword
+   */
+  changeKeyword(text) {
     // see https://github.com/ericgio/react-bootstrap-typeahead/issues/266#issuecomment-414987723
-    const text = this.props.keywordOnInit;
     const instance = this.typeahead.getInstance();
     instance.clear();
     instance.setState({ text });
@@ -123,8 +135,16 @@ class SearchTypeahead extends React.Component {
   }
 
   getEmptyLabel() {
+    const { emptyLabel, helpElement } = this.props;
+    const { input } = this.state;
+
+    // show help element if empty
+    if (input.length === 0) {
+      return helpElement;
+    }
+
     // use props.emptyLabel as is if defined
-    if (this.props.emptyLabel !== undefined) {
+    if (emptyLabel !== undefined) {
       return this.props.emptyLabel;
     }
 
@@ -141,11 +161,16 @@ class SearchTypeahead extends React.Component {
   /**
    * Get restore form button to initialize button
    */
-  getRestoreFormButton() {
-    const isHidden = (this.state.input === this.props.keywordOnInit);
+  getResetFormButton() {
+    const isClearBtn = this.props.behaviorOfResetBtn === 'clear';
+    const initialKeyword = isClearBtn ? '' : this.props.keywordOnInit;
+    const isHidden = this.state.input === initialKeyword;
+    const resetForm = isClearBtn ? this.clearKeyword : this.restoreInitialData;
 
-    return isHidden ? <span /> : (
-      <button type="button" className="btn btn-link search-clear" onMouseDown={this.restoreInitialData}>
+    return isHidden ? (
+      <span />
+    ) : (
+      <button type="button" className="btn btn-link search-clear" onMouseDown={resetForm}>
         <i className="icon-close" />
       </button>
     );
@@ -155,8 +180,8 @@ class SearchTypeahead extends React.Component {
     const page = option;
     return (
       <span>
-        <UserPicture user={page.lastUpdateUser} size="sm" withoutLink />
-        <PagePath page={page} />
+        <UserPicture user={page.lastUpdateUser} size="sm" noLink />
+        <span className="ml-1 text-break text-wrap"><PagePathLabel page={page} /></span>
         <PageListMeta page={page} />
       </span>
     );
@@ -171,7 +196,7 @@ class SearchTypeahead extends React.Component {
       inputProps.name = this.props.inputName;
     }
 
-    const restoreFormButton = this.getRestoreFormButton();
+    const resetFormButton = this.getResetFormButton();
 
     return (
       <div className="search-typeahead">
@@ -184,11 +209,8 @@ class SearchTypeahead extends React.Component {
           labelKey="path"
           minLength={0}
           options={this.state.pages} // Search result (Some page names)
+          promptText={this.props.helpElement}
           emptyLabel={this.getEmptyLabel()}
-          searchText={(this.state.isLoading ? 'Searching...' : this.getEmptyLabel())}
-              // DIRTY HACK
-              //  note: The default searchText string has been shown wrongly even if isLoading is false
-              //        since upgrade react-bootstrap-typeahead to v3.3.2 -- 2019.02.05 Yuki Takei
           align="left"
           submitFormOnEnter
           onSearch={this.search}
@@ -197,9 +219,11 @@ class SearchTypeahead extends React.Component {
           renderMenuItemChildren={this.renderMenuItemChildren}
           caseSensitive={false}
           defaultSelected={defaultSelected}
-          promptText={this.props.promptText}
+          autoFocus={this.props.autoFocus}
+          onBlur={this.props.onBlur}
+          onFocus={this.props.onFocus}
         />
-        {restoreFormButton}
+        {resetFormButton}
       </div>
     );
   }
@@ -209,9 +233,7 @@ class SearchTypeahead extends React.Component {
 /**
  * Wrapper component for using unstated
  */
-const SearchTypeaheadWrapper = (props) => {
-  return createSubscribedElement(SearchTypeahead, props, [AppContainer]);
-};
+const SearchTypeaheadWrapper = withUnstatedContainers(SearchTypeahead, [AppContainer]);
 
 /**
  * Properties
@@ -222,6 +244,8 @@ SearchTypeahead.propTypes = {
   onSearchSuccess: PropTypes.func,
   onSearchError:   PropTypes.func,
   onChange:        PropTypes.func,
+  onBlur:          PropTypes.func,
+  onFocus:         PropTypes.func,
   onSubmit:        PropTypes.func,
   onInputChange:   PropTypes.func,
   inputName:       PropTypes.string,
@@ -229,7 +253,9 @@ SearchTypeahead.propTypes = {
   emptyLabelExceptError: PropTypes.string,
   placeholder:     PropTypes.string,
   keywordOnInit:   PropTypes.string,
-  promptText:      PropTypes.object,
+  helpElement:     PropTypes.object,
+  autoFocus:       PropTypes.bool,
+  behaviorOfResetBtn: PropTypes.oneOf(['restore', 'clear']),
 };
 
 /**
@@ -241,6 +267,8 @@ SearchTypeahead.defaultProps = {
   onChange:        noop,
   placeholder:     '',
   keywordOnInit:   '',
+  behaviorOfResetBtn: 'restore',
+  autoFocus:       false,
   onInputChange: () => {},
 };
 

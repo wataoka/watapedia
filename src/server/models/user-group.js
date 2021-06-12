@@ -1,6 +1,6 @@
 const debug = require('debug')('growi:models:userGroup');
 const mongoose = require('mongoose');
-const mongoosePaginate = require('mongoose-paginate');
+const mongoosePaginate = require('mongoose-paginate-v2');
 
 
 /*
@@ -90,9 +90,8 @@ class UserGroup {
   }
 
   // グループの完全削除
-  static async removeCompletelyById(deleteGroupId, action, selectedGroupId) {
+  static async removeCompletelyById(deleteGroupId, action, transferToUserGroupId, user) {
     const UserGroupRelation = mongoose.model('UserGroupRelation');
-    const Page = mongoose.model('Page');
 
     const groupToDelete = await this.findById(deleteGroupId);
     if (groupToDelete == null) {
@@ -102,10 +101,14 @@ class UserGroup {
 
     await Promise.all([
       UserGroupRelation.removeAllByUserGroup(deletedGroup),
-      Page.handlePrivatePagesForDeletedGroup(deletedGroup, action, selectedGroupId),
+      UserGroup.crowi.pageService.handlePrivatePagesForDeletedGroup(deletedGroup, action, transferToUserGroupId, user),
     ]);
 
     return deletedGroup;
+  }
+
+  static countUserGroups() {
+    return this.estimatedDocumentCount();
   }
 
   // グループ生成（名前が要る）
@@ -114,10 +117,10 @@ class UserGroup {
   }
 
   // グループ名の更新
-  updateName(name) {
+  async updateName(name) {
     // 名前を設定して更新
     this.name = name;
-    return this.save();
+    await this.save();
   }
 
 }

@@ -1,165 +1,134 @@
-.main-container {
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    font-weight: 500;
+body {
+  overflow-y: scroll !important;
+}
+
+body:not(.growi-layout-fluid) .grw-container-convertible {
+  @extend .container-lg;
+}
+
+body.not-found-page .grw-container-convertible {
+  @extend .container-lg;
+}
+
+body.growi-layout-fluid .grw-container-convertible {
+  @extend .container-fluid;
+}
+
+.grw-logo {
+  svg {
+    width: $grw-logo-width;
+    height: $grw-navbar-height;
+    padding: ($grw-logo-width - $grw-logomark-width) / 2;
+  }
+}
+
+.confidential {
+  font-weight: bold;
+}
+
+.grw-modal-head {
+  font-size: 1em;
+  border-bottom: 1px solid transparent;
+}
+
+// padding settings for GrowiNavbarBottom
+.page-wrapper {
+  padding-bottom: $grw-navbar-bottom-height;
+
+  @include media-breakpoint-up(md) {
+    padding-bottom: unset;
+  }
+}
+
+.main {
+  margin-top: 1rem;
+
+  @include media-breakpoint-up(lg) {
+    margin-top: 2rem;
+  }
+}
+
+.grw-side-contents-container {
+  margin-bottom: 1rem;
+
+  @include media-breakpoint-up(lg) {
+    width: 250px;
+    min-width: 250px;
+    margin-left: 30px;
+  }
+}
+
+.grw-side-contents-sticky-container {
+  position: sticky;
+  // growisubnavigation + grw-navbar-boder
+  top: calc(100px + 4px);
+  margin-top: 5px;
+}
+
+.grw-fab {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 3rem;
+  z-index: $zindex-fixed;
+
+  transition: all 200ms linear;
+
+  .btn-create-page {
+    width: 60px;
+    height: 60px;
+    font-size: 24px;
+
+    box-shadow: 2px 3px 6px #0000005d;
+    svg {
+      width: 28px;
+      height: 28px;
+    }
   }
 
-  .navbar-top-links {
-    .confidential {
-      a {
-        font-weight: bold;
-        cursor: default;
-      }
-    }
+  .btn-scroll-to-top {
+    width: 40px;
+    height: 40px;
 
-    .nav-item-admin,
-    .nav-item-create-page {
-      span {
-        margin-left: 0.5em;
-        @media (max-width: $screen-xs-min) {
-          display: none;
-        }
-      }
-    }
-  }
-
-  /*
-   * header
-   */
-  header {
-    line-height: 1em;
-
-    h1 {
-      @include variable-font-size(28px);
-      line-height: 1.1em;
-    }
-
-    // affix
-    &.affix {
-      top: 0;
-      left: 0;
-      z-index: 15; // over the .sidebar
-      width: 100%;
-      padding: 2px 20px;
-      box-shadow: 0 0px 2px #999;
-
-      h1 {
-        @include variable-font-size(20px);
-      }
-    }
-  }
-
-  .main {
-    .header-wrap {
-      min-height: 70px;
-      padding: 15px 15px 0 15px;
-    }
-  }
-
-  .layout-control {
-    position: fixed;
-    right: 25%;
-    bottom: 25px;
-    z-index: 1039;
-    display: block;
-    padding: 5px 8px;
-    font-size: 0.8em;
-    text-align: center;
-    border: solid 1px #ccc;
-    border-right: none;
-    border-radius: 5px 0 0 5px;
-    transition: 0.3s ease;
-
-    &:hover {
-      text-decoration: none;
-      cursor: pointer;
-    }
-  }
-
-  .revision-toc {
-    max-width: 250px;
-    overflow: hidden;
-    font-size: 0.9em;
-
-    .revision-toc-content {
-      padding: 10px;
-
-      > ul {
-        padding-left: 0;
-        ul {
-          padding-left: 1em;
-        }
-      }
-
-      // first level of li
-      > ul > li {
-        padding: 5px;
-        margin: 4px 4px 4px 15px;
-      }
-    }
-  }
-} // }}}
-
-// fix tab width to 95 pixels
-// see also '_on-edit.scss'
-$nav-main-left-tab-width: 95px;
-
-.nav.nav-tabs {
-  .nav-main-left-tab {
-    width: $nav-main-left-tab-width;
-    text-align: center;
-    a {
-      padding-right: 0;
-      padding-left: 0;
+    opacity: 0.4;
+    svg {
+      width: 18px;
+      height: 18px;
     }
   }
 }
 
 // printable style
 @media print {
-  .main-container {
-    padding: 30px;
+  padding: 30px;
 
-    a:after {
-      display: none !important;
+  a:after {
+    display: none !important;
+  }
+  .main {
+    header {
+      border-bottom: solid 1px $secondary;
+      h1 {
+        font-size: 2em;
+        color: black;
+      }
     }
-    .main {
-      header {
-        border-bottom: solid 1px #666;
-        h1 {
-          font-size: 2em;
-          color: #000;
-        }
-      }
 
-      .revision-toc {
-        float: none;
-        max-width: 100%;
-        margin-bottom: 20px;
-        font-size: 0.9em;
-        border: solid 1px #aaa;
-        border-radius: 5px;
+    .row {
+      display: block !important;
+    }
 
-        .revision-toc-head {
-          display: inline-block;
-          float: none;
-        }
+    .revision-toc {
+      float: none;
+      max-width: 100%;
+      margin-bottom: 20px;
+      font-size: 0.9em;
+      border: solid 1px $gray-400;
+    }
 
-        .revision-toc-content.collapse {
-          display: block;
-          height: auto;
-        }
-      }
-
-      .meta {
-        margin-top: 32px;
-        color: #666;
-        border-top: solid 1px #ccc;
-      }
+    .meta {
+      margin-top: 32px;
+      color: $secondary;
+      border-top: solid 1px $gray-300;
     }
   }
 }

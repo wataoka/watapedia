@@ -3,14 +3,12 @@ import PropTypes from 'prop-types';
 
 import { withTranslation } from 'react-i18next';
 
-import FormGroup from 'react-bootstrap/es/FormGroup';
-import FormControl from 'react-bootstrap/es/FormControl';
-import ControlLabel from 'react-bootstrap/es/ControlLabel';
+import {
+  Dropdown, DropdownToggle, DropdownMenu, DropdownItem,
+} from 'reactstrap';
 
-import Dropdown from 'react-bootstrap/es/Dropdown';
-import MenuItem from 'react-bootstrap/es/MenuItem';
-
-import { createSubscribedElement } from '../UnstatedUtils';
+import { withUnstatedContainers } from '../UnstatedUtils';
+import AppContainer from '../../services/AppContainer';
 import EditorContainer from '../../services/EditorContainer';
 
 
@@ -29,7 +27,7 @@ class OptionsSelector extends React.Component {
   constructor(props) {
     super(props);
 
-    const config = this.props.crowi.getConfig();
+    const config = this.props.appContainer.getConfig();
     const isMathJaxEnabled = !!config.env.MATHJAX;
 
     this.state = {
@@ -46,29 +44,20 @@ class OptionsSelector extends React.Component {
       emacs: 'Emacs',
       sublime: 'Sublime Text',
     };
+    this.typicalIndentSizes = [2, 4];
 
     this.onChangeTheme = this.onChangeTheme.bind(this);
     this.onChangeKeymapMode = this.onChangeKeymapMode.bind(this);
     this.onClickStyleActiveLine = this.onClickStyleActiveLine.bind(this);
     this.onClickRenderMathJaxInRealtime = this.onClickRenderMathJaxInRealtime.bind(this);
+    this.onClickMarkdownTableAutoFormatting = this.onClickMarkdownTableAutoFormatting.bind(this);
     this.onToggleConfigurationDropdown = this.onToggleConfigurationDropdown.bind(this);
+    this.onChangeIndentSize = this.onChangeIndentSize.bind(this);
   }
 
-  componentDidMount() {
-    this.init();
-  }
-
-  init() {
+  onChangeTheme(newValue) {
     const { editorContainer } = this.props;
 
-    this.themeSelectorInputEl.value = editorContainer.state.editorOptions.theme;
-    this.keymapModeSelectorInputEl.value = editorContainer.state.editorOptions.keymapMode;
-  }
-
-  onChangeTheme() {
-    const { editorContainer } = this.props;
-
-    const newValue = this.themeSelectorInputEl.value;
     const newOpts = Object.assign(editorContainer.state.editorOptions, { theme: newValue });
     editorContainer.setState({ editorOptions: newOpts });
 
@@ -76,10 +65,9 @@ class OptionsSelector extends React.Component {
     editorContainer.saveOptsToLocalStorage();
   }
 
-  onChangeKeymapMode() {
+  onChangeKeymapMode(newValue) {
     const { editorContainer } = this.props;
 
-    const newValue = this.keymapModeSelectorInputEl.value;
     const newOpts = Object.assign(editorContainer.state.editorOptions, { keymapMode: newValue });
     editorContainer.setState({ editorOptions: newOpts });
 
@@ -104,9 +92,6 @@ class OptionsSelector extends React.Component {
   onClickRenderMathJaxInRealtime(event) {
     const { editorContainer } = this.props;
 
-    // keep dropdown opened
-    this._cddForceOpen = true;
-
     const newValue = !editorContainer.state.previewOptions.renderMathJaxInRealtime;
     const newOpts = Object.assign(editorContainer.state.previewOptions, { renderMathJaxInRealtime: newValue });
     editorContainer.setState({ previewOptions: newOpts });
@@ -115,106 +100,119 @@ class OptionsSelector extends React.Component {
     editorContainer.saveOptsToLocalStorage();
   }
 
-  /*
-   * see: https://github.com/react-bootstrap/react-bootstrap/issues/1490#issuecomment-207445759
-   */
+  onClickMarkdownTableAutoFormatting(event) {
+    const { editorContainer } = this.props;
+
+    const newValue = !editorContainer.state.editorOptions.ignoreMarkdownTableAutoFormatting;
+    const newOpts = Object.assign(editorContainer.state.editorOptions, { ignoreMarkdownTableAutoFormatting: newValue });
+    editorContainer.setState({ editorOptions: newOpts });
+
+    // save to localStorage
+    editorContainer.saveOptsToLocalStorage();
+  }
+
   onToggleConfigurationDropdown(newValue) {
-    if (this._cddForceOpen) {
-      this.setState({ isCddMenuOpened: true });
-      this._cddForceOpen = false;
-    }
-    else {
-      this.setState({ isCddMenuOpened: newValue });
-    }
+    this.setState({ isCddMenuOpened: !this.state.isCddMenuOpened });
+  }
+
+  onChangeIndentSize(newValue) {
+    const { editorContainer } = this.props;
+    editorContainer.setState({ indentSize: newValue });
   }
 
   renderThemeSelector() {
-    const optionElems = this.availableThemes.map((theme) => {
-      return <option key={theme} value={theme}>{theme}</option>;
+    const { editorContainer } = this.props;
+
+    const selectedTheme = editorContainer.state.editorOptions.theme;
+    const menuItems = this.availableThemes.map((theme) => {
+      return <button key={theme} className="dropdown-item" type="button" onClick={() => this.onChangeTheme(theme)}>{theme}</button>;
     });
 
-    const bsClassName = 'form-control-dummy'; // set form-control* to shrink width
-
     return (
-      <FormGroup controlId="formControlsSelect" className="my-0">
-        <ControlLabel>Theme:</ControlLabel>
-        <FormControl
-          componentClass="select"
-          placeholder="select"
-          bsClass={bsClassName}
-          className="btn-group-sm selectpicker"
-          onChange={this.onChangeTheme}
-          // eslint-disable-next-line no-return-assign
-          inputRef={(el) => { return this.themeSelectorInputEl = el }}
-        >
-
-          {optionElems}
-
-        </FormControl>
-      </FormGroup>
+      <div className="input-group flex-nowrap">
+        <div className="input-group-prepend">
+          <span className="input-group-text" id="igt-theme">Theme</span>
+        </div>
+        <div className="input-group-append dropup">
+          <button
+            type="button"
+            className="btn btn-outline-secondary dropdown-toggle"
+            data-toggle="dropdown"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-describedby="igt-theme"
+          >
+            {selectedTheme}
+          </button>
+          <div className="dropdown-menu" aria-labelledby="dropdownMenuLink">
+            {menuItems}
+          </div>
+        </div>
+      </div>
     );
   }
 
   renderKeymapModeSelector() {
-    const optionElems = [];
-    // eslint-disable-next-line guard-for-in, no-restricted-syntax
-    for (const mode in this.keymapModes) {
-      const label = this.keymapModes[mode];
-      const dataContent = (mode === 'default')
-        ? label
-        : `<img src='/images/icons/${mode}.png' width='16px' class='m-r-5'></img> ${label}`;
-      optionElems.push(
-        <option key={mode} value={mode} data-content={dataContent}>{label}</option>,
-      );
-    }
+    const { editorContainer } = this.props;
 
-    const bsClassName = 'form-control-dummy'; // set form-control* to shrink width
+    const selectedKeymapMode = editorContainer.state.editorOptions.keymapMode;
+    const menuItems = Object.keys(this.keymapModes).map((mode) => {
+      const label = this.keymapModes[mode];
+      const icon = (mode !== 'default')
+        ? <img src={`/images/icons/${mode}.png`} width="16px" className="mr-2"></img>
+        : null;
+      return <button key={mode} className="dropdown-item" type="button" onClick={() => this.onChangeKeymapMode(mode)}>{icon}{label}</button>;
+    });
 
     return (
-      <FormGroup controlId="formControlsSelect" className="my-0">
-        <ControlLabel>Keymap:</ControlLabel>
-        <FormControl
-          componentClass="select"
-          placeholder="select"
-          bsClass={bsClassName}
-          className="btn-group-sm selectpicker"
-          onChange={this.onChangeKeymapMode}
-          // eslint-disable-next-line no-return-assign
-          inputRef={(el) => { return this.keymapModeSelectorInputEl = el }}
-        >
-
-          {optionElems}
-
-        </FormControl>
-      </FormGroup>
+      <div className="input-group flex-nowrap">
+        <div className="input-group-prepend">
+          <span className="input-group-text" id="igt-keymap">Keymap</span>
+        </div>
+        <div className="input-group-append dropup">
+          <button
+            type="button"
+            className="btn btn-outline-secondary dropdown-toggle"
+            data-toggle="dropdown"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-describedby="igt-keymap"
+          >
+            {selectedKeymapMode}
+          </button>
+          <div className="dropdown-menu" aria-labelledby="dropdownMenuLink">
+            {menuItems}
+          </div>
+        </div>
+      </div>
     );
   }
 
   renderConfigurationDropdown() {
     return (
-      <FormGroup controlId="formControlsSelect" className="my-0">
+      <div className="my-0 form-group">
 
         <Dropdown
-          dropup
-          id="configurationDropdown"
-          className="configuration-dropdown"
-          open={this.state.isCddMenuOpened}
-          onToggle={this.onToggleConfigurationDropdown}
+          direction="up"
+          className="grw-editor-configuration-dropdown"
+          isOpen={this.state.isCddMenuOpened}
+          toggle={this.onToggleConfigurationDropdown}
         >
 
-          <Dropdown.Toggle bsSize="sm">
+          <DropdownToggle color="outline-secondary" caret>
             <i className="icon-settings"></i>
-          </Dropdown.Toggle>
+          </DropdownToggle>
 
-          <Dropdown.Menu>
+          <DropdownMenu>
             {this.renderActiveLineMenuItem()}
             {this.renderRealtimeMathJaxMenuItem()}
-            {/* <MenuItem divider /> */}
-          </Dropdown.Menu>
+            {this.renderMarkdownTableAutoFormattingMenuItem()}
+            {/* <DropdownItem divider /> */}
+          </DropdownMenu>
 
         </Dropdown>
 
-      </FormGroup>
+      </div>
     );
   }
 
@@ -229,11 +227,13 @@ class OptionsSelector extends React.Component {
     const iconClassName = iconClasses.join(' ');
 
     return (
-      <MenuItem onClick={this.onClickStyleActiveLine}>
-        <span className="icon-container"></span>
-        <span className="menuitem-label">{ t('page_edit.Show active line') }</span>
-        <span className="icon-container"><i className={iconClassName}></i></span>
-      </MenuItem>
+      <DropdownItem toggle={false} onClick={this.onClickStyleActiveLine}>
+        <div className="d-flex justify-content-between">
+          <span className="icon-container"></span>
+          <span className="menuitem-label">{ t('page_edit.Show active line') }</span>
+          <span className="icon-container"><i className={iconClassName}></i></span>
+        </div>
+      </DropdownItem>
     );
   }
 
@@ -254,20 +254,75 @@ class OptionsSelector extends React.Component {
     const iconClassName = iconClasses.join(' ');
 
     return (
-      <MenuItem onClick={this.onClickRenderMathJaxInRealtime}>
-        <span className="icon-container"><img src="/images/icons/fx.svg" width="14px" alt="fx"></img></span>
-        <span className="menuitem-label">MathJax Rendering</span>
-        <i className={iconClassName}></i>
-      </MenuItem>
+      <DropdownItem toggle={false} onClick={this.onClickRenderMathJaxInRealtime}>
+        <div className="d-flex justify-content-between">
+          <span className="icon-container"><img src="/images/icons/fx.svg" width="14px" alt="fx"></img></span>
+          <span className="menuitem-label">MathJax Rendering</span>
+          <span className="icon-container"><i className={iconClassName}></i></span>
+        </div>
+      </DropdownItem>
+    );
+  }
+
+  renderMarkdownTableAutoFormattingMenuItem() {
+    const { t, editorContainer } = this.props;
+    // Auto-formatting was enabled before optionalizing, so we made it a disabled option(ignoreMarkdownTableAutoFormatting).
+    const isActive = !editorContainer.state.editorOptions.ignoreMarkdownTableAutoFormatting;
+
+    const iconClasses = ['text-info'];
+    if (isActive) {
+      iconClasses.push('ti-check');
+    }
+    const iconClassName = iconClasses.join(' ');
+
+    return (
+      <DropdownItem toggle={false} onClick={this.onClickMarkdownTableAutoFormatting}>
+        <div className="d-flex justify-content-between">
+          <span className="icon-container"></span>
+          <span className="menuitem-label">{ t('page_edit.auto_format_table') }</span>
+          <span className="icon-container"><i className={iconClassName}></i></span>
+        </div>
+      </DropdownItem>
+    );
+  }
+
+  renderIndentSizeSelector() {
+    const { appContainer, editorContainer } = this.props;
+    const menuItems = this.typicalIndentSizes.map((indent) => {
+      return <button key={indent} className="dropdown-item" type="button" onClick={() => this.onChangeIndentSize(indent)}>{indent}</button>;
+    });
+    return (
+      <div className="input-group flex-nowrap">
+        <div className="input-group-prepend">
+          <span className="input-group-text" id="igt-indent">Indent</span>
+        </div>
+        <div className="input-group-append dropup">
+          <button
+            type="button"
+            className="btn btn-outline-secondary dropdown-toggle"
+            data-toggle="dropdown"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-describedby="igt-indent"
+            disabled={appContainer.config.isIndentSizeForced}
+          >
+            {editorContainer.state.indentSize}
+          </button>
+          <div className="dropdown-menu" aria-labelledby="dropdownMenuLink">
+            {menuItems}
+          </div>
+        </div>
+      </div>
     );
   }
 
   render() {
     return (
       <div className="d-flex flex-row">
-        <span className="m-l-5">{this.renderThemeSelector()}</span>
-        <span className="m-l-5">{this.renderKeymapModeSelector()}</span>
-        <span className="m-l-5">{this.renderConfigurationDropdown()}</span>
+        <span>{this.renderThemeSelector()}</span>
+        <span className="d-none d-sm-block ml-2 ml-sm-4">{this.renderKeymapModeSelector()}</span>
+        <span className="ml-2 ml-sm-4">{this.renderIndentSizeSelector()}</span>
+        <span className="ml-2 ml-sm-4">{this.renderConfigurationDropdown()}</span>
       </div>
     );
   }
@@ -277,16 +332,13 @@ class OptionsSelector extends React.Component {
 /**
  * Wrapper component for using unstated
  */
-const OptionsSelectorWrapper = (props) => {
-  return createSubscribedElement(OptionsSelector, props, [EditorContainer]);
-};
+const OptionsSelectorWrapper = withUnstatedContainers(OptionsSelector, [AppContainer, EditorContainer]);
 
 OptionsSelector.propTypes = {
   t: PropTypes.func.isRequired, // i18next
 
+  appContainer: PropTypes.instanceOf(AppContainer).isRequired,
   editorContainer: PropTypes.instanceOf(EditorContainer).isRequired,
-
-  crowi: PropTypes.object.isRequired,
 };
 
 export default withTranslation()(OptionsSelectorWrapper);

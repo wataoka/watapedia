@@ -10,6 +10,8 @@ module.exports = {
   entry: {
     dlls: [
       // Libraries
+      '@atlaskit/drawer',
+      '@atlaskit/navigation-next',
       'axios',
       'browser-bunyan', 'bunyan-format',
       'codemirror', 'react-codemirror2',
@@ -23,7 +25,7 @@ module.exports = {
       'lodash', 'pako',
       'markdown-it', 'csv-to-markdown-table',
       'react', 'react-dom',
-      'react-bootstrap', 'react-bootstrap-typeahead',
+      'reactstrap', 'react-bootstrap-typeahead',
       'react-i18next', 'react-dropzone', 'react-hotkeys', 'react-copy-to-clipboard', 'react-waypoint',
       'socket.io-client',
       'toastr',

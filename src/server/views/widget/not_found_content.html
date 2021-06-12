@@ -1,52 +1,34 @@
-<div class="row not-found-message-row m-b-20">
-  <div class="col-md-12">
-    <h2 class="text-muted">
-      <i class="icon-info" aria-hidden="true"></i>
-      Page is not found
-    </h2>
-  </div>
-</div>
-
-<div id="content-main" class="content-main content-main-not-found page-list"
-  data-path="{{ path | preventXss }}"
+<div id="content-main" class="content-main page-list"
+  data-path="{{ encodeURI(path) }}"
   data-current-user="{% if user %}{{ user._id.toString() }}{% endif %}"
+  data-page-grant="{{ grant }}"
+  data-page-grant-group="{{ grantedGroupId }}"
+  data-page-grant-group-name="{{ grantedGroupName }}"
   {% if templateTags %}
     data-template-tags="{{ templateTags }}"
   {% endif %}
   >
-
-  {% include 'not_found_tabs.html' %}
-
+  <div id="display-switcher"></div>
+  <div id="not-found-page"></div>
   <div class="tab-content">
+
+
+    {# TODO: should be removed and transplanted to PageContainer.initStateMarkdown ------ from here ------ #}
+
     {% if getConfig('crowi', 'customize:isEnabledAttachTitleHeader') %}
     {% if template %}
-    <script type="text/template" id="raw-text-original"># {{ path|path2name }}&NewLine;{{ template }}</script>
+    <script type="text/template" id="raw-text-original"># {{ path | path2name | preventXss }}&NewLine;{{ template }}</script>
     {% else %}
-    <script type="text/template" id="raw-text-original"># {{ path|path2name }}</script>
+    <script type="text/template" id="raw-text-original"># {{ path | path2name | preventXss }}</script>
     {% endif %}
     {% else %}
     {% if template %}
     <script type="text/template" id="raw-text-original">{{ template }}</script>
     {% endif %}
     {% endif %}
-    {# list view #}
-    <div class="p-t-10 active tab-pane page-list-container" id="revision-body">
-      {% if pages.length == 0 %}
-        <div class="m-t-10">
-          There are no pages under <strong>{{ path }}</strong>.
-        </div>
-      {% endif  %}
 
-      {% include '../widget/page_list.html' with { pages: pages, pager: pager, viewConfig: viewConfig } %}
-    </div>
-
-    {# edit view #}
-    <div class="tab-pane" id="edit">
-      <div id="page-editor">{% if pageForm.body %}{{ pageForm.body }}{% endif %}</div>
-    </div>
-    {% include '../_form.html' %}
-
+    {# TODO: should be removed and transplanted to PageContainer.initStateMarkdown ------ to here ------ #}
   </div>
 
-  <div id="page-status-alert"></div>
+  <div id="grw-page-status-alert-container"></div>
 </div>

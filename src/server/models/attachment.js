@@ -1,12 +1,14 @@
 // disable no-return-await for model functions
 /* eslint-disable no-return-await */
 
-const debug = require('debug')('growi:models:attachment');
 // eslint-disable-next-line no-unused-vars
 const logger = require('@alias/logger')('growi:models:attachment');
 const path = require('path');
 
 const mongoose = require('mongoose');
+const uniqueValidator = require('mongoose-unique-validator');
+const mongoosePaginate = require('mongoose-paginate-v2');
+const { addSeconds } = require('date-fns');
 
 const ObjectId = mongoose.Schema.Types.ObjectId;
 
@@ -22,12 +24,16 @@ module.exports = function(crowi) {
     page: { type: ObjectId, ref: 'Page', index: true },
     creator: { type: ObjectId, ref: 'User', index: true },
     filePath: { type: String }, // DEPRECATED: remains for backward compatibility for v3.3.x or below
-    fileName: { type: String, required: true },
+    fileName: { type: String, required: true, unique: true },
     originalName: { type: String },
     fileFormat: { type: String, required: true },
     fileSize: { type: Number, default: 0 },
     createdAt: { type: Date, default: Date.now },
+    temporaryUrlCached: { type: String },
+    temporaryUrlExpiredAt: { type: Date },
   });
+  attachmentSchema.plugin(uniqueValidator);
+  attachmentSchema.plugin(mongoosePaginate);
 
   attachmentSchema.virtual('filePathProxied').get(function() {
     return `/attachment/${this._id}`;
@@ -41,8 +47,7 @@ module.exports = function(crowi) {
   attachmentSchema.set('toJSON', { virtuals: true });
 
 
-  attachmentSchema.statics.create = async function(pageId, user, fileStream, originalName, fileFormat, fileSize) {
-    const fileUploader = require('../service/file-uploader')(crowi);
+  attachmentSchema.statics.createWithoutSave = function(pageId, user, fileStream, originalName, fileFormat, fileSize) {
     const Attachment = this;
 
     const extname = path.extname(originalName);
@@ -51,7 +56,7 @@ module.exports = function(crowi) {
       fileName = `${fileName}${extname}`;
     }
 
-    let attachment = new Attachment();
+    const attachment = new Attachment();
     attachment.page = pageId;
     attachment.creator = user._id;
     attachment.originalName = originalName;
@@ -60,44 +65,29 @@ module.exports = function(crowi) {
     attachment.fileSize = fileSize;
     attachment.createdAt = Date.now();
 
-    // upload file
-    await fileUploader.uploadFile(fileStream, attachment);
-    // save attachment
-    attachment = await attachment.save();
-
     return attachment;
   };
 
-  attachmentSchema.statics.removeAttachmentsByPageId = function(pageId) {
-    const Attachment = this;
 
-    return new Promise((resolve, reject) => {
-      Attachment.find({ page: pageId })
-        .then((attachments) => {
-          for (const attachment of attachments) {
-            Attachment.removeWithSubstanceById(attachment._id)
-              .then((res) => {
-                // do nothing
-              })
-              .catch((err) => {
-                debug('Attachment remove error', err);
-              });
-          }
-
-          resolve(attachments);
-        })
-        .catch((err) => {
-          reject(err);
-        });
-    });
+  attachmentSchema.methods.getValidTemporaryUrl = function() {
+    if (this.temporaryUrlExpiredAt == null) {
+      return null;
+    }
+    // return null when expired url
+    if (this.temporaryUrlExpiredAt.getTime() < new Date().getTime()) {
+      return null;
+    }
+    return this.temporaryUrlCached;
   };
 
-  attachmentSchema.statics.removeWithSubstanceById = async function(id) {
-    const fileUploader = require('../service/file-uploader')(crowi);
-    // retrieve data from DB to get a completely populated instance
-    const attachment = await this.findById(id);
-    await fileUploader.deleteFile(attachment);
-    return await attachment.remove();
+  attachmentSchema.methods.cashTemporaryUrlByProvideSec = function(temporaryUrl, provideSec) {
+    if (temporaryUrl == null) {
+      throw new Error('url is required.');
+    }
+    this.temporaryUrlCached = temporaryUrl;
+    this.temporaryUrlExpiredAt = addSeconds(new Date(), provideSec);
+
+    return this.save();
   };
 
   return mongoose.model('Attachment', attachmentSchema);

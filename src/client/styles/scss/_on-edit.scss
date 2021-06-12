@@ -9,54 +9,57 @@ body:not(.on-edit) {
 }
 
 body.on-edit {
-  // calculate margin
-  $header-plus-footer: 42px //  .nav height
-    + 1px //                    .page-editor-footer border-top
-    + 40px !default; //         .page-editor-footer min-height
+  overflow-y: hidden !important;
 
-  @include expand-editor($header-plus-footer);
+  .container-fluid {
+    padding-right: 15px;
+    padding-left: 15px;
+  }
 
-  // for growi layout
-  .main {
-    > .row {
-      margin: 0;
+  .grw-navbar {
+    position: fixed !important;
+    width: 100vw;
+  }
 
-      > .col-lg-10,
-      > .col-md-9 {
-        width: 100%;
-        padding: 0;
-      }
+  // restrict height of subnav
+  .grw-subnav {
+    height: $grw-subnav-height-on-edit;
+    min-height: unset;
+    padding-top: 0;
+
+    @include media-breakpoint-up(lg) {
+      height: $grw-subnav-height-lg-on-edit;
     }
   }
 
+  .page-wrapper {
+    position: relative;
+    top: $grw-navbar-border-width;
+    height: calc(100vh - #{$grw-navbar-border-width});
+  }
+
+  // calculate margin
+  $editor-margin-top: $grw-navbar-border-width + $grw-subnav-height-on-edit;
+  @include expand-editor($editor-margin-top);
+
+  @include media-breakpoint-up(lg) {
+    // calculate margin
+    $editor-margin-top: $grw-navbar-border-width + $grw-subnav-height-lg-on-edit;
+    @include expand-editor($editor-margin-top);
+  }
+
+  // show
+  .d-edit-block {
+    display: block !important;
+  }
+
   // hide unnecessary elements
-  .navbar.navbar-static-top,
-  .row.row-alerts,
-  .row.page-list,
-  .row.page-comments-row,
-  .row.page-attachments-row,
-  .row.not-found-message-row,
-  .users-info,
-  .user-page-content-container,
-  .portal-form-button,
-  .alert-info.alert-moved,
-  .alert-info.alert-unlinked,
-  .btn-like,
-  .btn-bookmark,
-  .btn-edit,
-  .authors,
-  footer {
+  .d-edit-none {
     display: none !important;
   }
 
-  // hide unnecessary elements for growi layout
-  .revision-toc-container {
-    display: none;
-  }
-
-  // hide unnecessary elements for crowi layout
-  #toggle-sidebar,
-  .crowi-sidebar {
+  // hide when HackMD view
+  &.hackmd .d-hackmd-none {
     display: none;
   }
 
@@ -65,96 +68,115 @@ body.on-edit {
     display: none;
   }
 
+  &.hackmd .grw-nav-item-edit {
+    display: none;
+  }
+
   &:not(.hackmd) .nav-tab-hackmd {
     display: none;
   }
 
-  // hide hackmd related alert
-  &.hackmd #page-status-alert {
-    .alert-hackmd-someone-editing,
-    .alert-hackmd-draft-exists {
-      display: none;
-    }
+  .toast-top-right {
+    top: 64px;
   }
 
   /*****************
    * Expand Editor
    *****************/
-  .container-fluid {
-    padding-bottom: 0;
-  }
+  .grw-editor-navbar-bottom {
+    height: $grw-editor-navbar-bottom-height;
 
-  .row.bg-title {
-    $left-margin: $nav-main-left-tab-width * 2 + 25px; // width of .nav-main-left-tab x 2 + some margin
-    $right-margin: 128px + 94px + 46px; //                width of all of nav-main-right-tab
-
-    position: absolute;
-    left: $left-margin;
-    z-index: 7; // forward than .CodeMirror-vscrollbar
-    width: calc(100% - #{$left-margin} - #{$right-margin});
-    padding-top: 3px;
-    pointer-events: none; // disable pointer-events because it becomes an obstacle
-
-    background: none;
-
-    > .header-container {
-      width: 100%; //   for crowi layout
-      padding: 0; //    for crowi layout
-      pointer-events: initial; // enable pointer-events
-    }
-
-    h1#revision-path {
-      @include variable-font-size(20px);
-      line-height: 1em;
-
-      // nowrap even if the path is too long
-      .d-flex {
-        flex-wrap: nowrap;
+    .grw-grant-selector {
+      @include media-breakpoint-down(sm) {
+        .btn .label {
+          display: none;
+        }
       }
+      @include media-breakpoint-up(md) {
+        .dropdown-toggle {
+          min-width: 100px;
 
-      .path-segment {
-        white-space: nowrap;
-      }
-    }
-
-    .tag-viewer.new-page {
-      display: block;
-    }
-
-    // hide if screen size is less than tablet
-    @media (max-width: $screen-sm) {
-      display: none;
-    }
-  }
-
-  .page-editor-footer {
-    width: 100%;
-    min-height: 40px;
-    padding: 3px;
-    margin: 0;
-    border-top: solid 1px transparent;
-
-    .grant-selector {
-      .btn-group {
-        min-width: 150px;
+          // caret
+          &::after {
+            margin-left: 1em;
+          }
+        }
       }
     }
 
     .btn-submit {
       width: 100px;
     }
+
+    .btn-expand {
+      // rotate icon
+      i {
+        display: inline-block;
+        transition: transform 200ms;
+      }
+      &.expand i {
+        transform: rotate(-180deg);
+      }
+    }
   }
 
-  #page-status-alert .myadmin-alert {
-    position: absolute;
-    right: 3px;
-    bottom: 42px;
-    left: 3px;
-    box-shadow: 2px 2px 5px #666;
-    opacity: 0.8;
+  /*********************
+   * Navigation styles
+   */
+  .grw-subnav {
+    padding-bottom: 0;
 
-    &:hover {
-      opacity: 1;
+    h1 {
+      font-size: 16px;
+    }
+
+    .grw-drawer-toggler {
+      width: 38px;
+      height: 38px;
+      font-size: 18px;
+    }
+
+    .grw-taglabels-container {
+      margin-bottom: 0;
+
+      // To scroll tags horizontally
+      .grw-tag-labels.form-inline {
+        flex-flow: row nowrap;
+        width: 100%;
+        overflow-x: auto;
+        scrollbar-width: thin;
+      }
+    }
+  }
+
+  // ellipsis .grw-page-path-hierarchical-link
+  .grw-subnav-left-side {
+    overflow: hidden;
+    .grw-path-nav-container {
+      margin-right: 1rem;
+      overflow: hidden;
+      .grw-page-path-nav {
+        white-space: nowrap;
+
+        .grw-page-path-hierarchical-link {
+          width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        h1 {
+          overflow: hidden;
+        }
+      }
+    }
+  }
+
+  .nav:hover {
+    .btn-copy,
+    .btn-edit,
+    .btn-edit-tags {
+      // change button opacity
+      opacity: unset;
     }
   }
 
@@ -176,24 +198,34 @@ body.on-edit {
         }
       }
 
-      .navbar-editor {
-        border-bottom: 1px solid transparent;
+      // add icon on cursor
+      .markdown-table-activated,
+      .markdown-link-activated {
+        .CodeMirror-cursor {
+          &:after {
+            position: relative;
+            top: -1.1em;
+            left: 0.3em;
+            display: block;
+            width: 1em;
+            height: 1em;
+            content: ' ';
+
+            background-repeat: no-repeat;
+            background-size: 1em;
+          }
+        }
       }
 
-      // add icon on cursor
-      .autoformat-markdown-table-activated .CodeMirror-cursor {
+      .markdown-table-activated .CodeMirror-cursor {
         &:after {
-          position: relative;
-          top: -1.1em;
-          left: 0.3em;
-          display: block;
-          width: 1em;
-          height: 1em;
-          content: ' ';
-
           background-image: url(/images/icons/editor/table.svg);
-          background-repeat: no-repeat;
-          background-size: 1em;
+        }
+      }
+
+      .markdown-link-activated .CodeMirror-cursor {
+        &:after {
+          background-image: url(/images/icons/editor/link.svg);
         }
       }
 
@@ -207,61 +239,37 @@ body.on-edit {
     }
 
     .page-editor-preview-body {
-      padding-top: 18px;
-      padding-right: 15px;
+      padding: 18px 15px 0;
       overflow-y: scroll;
     }
 
-    #page-editor-options-selector {
-      label {
-        margin-right: 0.5em;
+    .grw-editor-configuration-dropdown {
+      .icon-container {
+        width: 20px;
       }
-
-      // configuration dropdown
-      .configuration-dropdown {
-        .icon-container {
-          display: inline-block;
-          width: 20px;
-        }
-
-        .dropdown-menu > li > a {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-
-          .menuitem-label {
-            flex: 1;
-            margin-right: 10px;
-          }
-        }
-      }
-
-      // less than smartphone size
-      @media (max-width: $screen-xs-max) {
-        display: none;
-      }
-    }
-
-    #page-grant-selector {
-      .btn-group {
-        min-width: 150px;
-      }
-    }
-
-    #page-grant-selector {
-      .btn-group {
-        min-width: 150px;
+      .menuitem-label {
+        min-width: 130px;
       }
     }
   }
 
   // .builtin-editor .tab-pane#edit
 
-  &.hackmd {
-    #page-editor-options-selector {
-      display: none;
-    }
+  // editing /Sidebar
+  &.pathname-sidebar {
+    .page-editor-preview-body {
+      width: 320px;
+      padding-top: 0;
+      margin-right: auto;
+      margin-left: auto;
 
+      .wiki {
+        @extend %grw-custom-sidebar-content;
+      }
+    }
+  }
+
+  &.hackmd {
     .hackmd-preinit,
     #iframe-hackmd-container > iframe {
       border: none;
@@ -269,12 +277,11 @@ body.on-edit {
 
     .hackmd-error {
       top: 0;
-      background-color: rgba($gray-dark, 0.8);
+      background-color: rgba($gray-800, 0.8);
     }
 
     .hackmd-status-label {
       font-size: 3em;
-      color: $muted;
     }
 
     .hackmd-resume-button-container,
@@ -292,19 +299,22 @@ body.on-edit {
   }
 }
 
-/*
- * for creating portal
- */
-.nav-tabs-create-portal {
-  display: none;
-}
-
-.on-edit .nav-tabs-create-portal {
-  display: block;
+body.on-edit {
+  &:not(.growi-layout-fluid) .page-editor-preview-body {
+    .wiki {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+  }
+  &.growi-layout-fluid .page-editor-preview-body {
+    .wiki {
+      margin: 0 auto;
+    }
+  }
 }
 
 // overwrite .CodeMirror pre
-.CodeMirror pre {
+.CodeMirror pre.CodeMirror-line {
   font-family: $font-family-monospace;
 }
 
@@ -339,12 +349,58 @@ body.on-edit {
 
 #tag-edit-button-tooltip {
   .tooltip-inner {
-    color: #000;
-    background-color: #fff;
-    border: 1px solid #ccc;
+    color: black;
+    background-color: white;
+    border: 1px solid $gray-300;
   }
 
   .tooltip-arrow {
-    border-bottom: 5px solid #ccc;
+    border-bottom: 5px solid $gray-300;
+  }
+}
+
+/*
+ Grid Edit Modal
+*/
+
+.grw-grid-edit-modal {
+  .desktop-preview,
+  .tablet-preview,
+  .mobile-preview {
+    .row {
+      height: 140px;
+      margin: 0px;
+    }
+  }
+  .desktop-preview {
+    .row {
+      div {
+        padding: 0px;
+      }
+    }
+  }
+
+  .tablet-preview {
+    .row {
+      div {
+        padding: 0px;
+      }
+    }
+  }
+
+  .mobile-preview {
+    width: 75%;
+    .row {
+      div {
+        padding: 0px;
+      }
+    }
+  }
+
+  .grid-division-menu {
+    width: 60vw;
+    @include media-breakpoint-down(lg) {
+      width: 80vw;
+    }
   }
 }

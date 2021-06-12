@@ -1,5 +1,11 @@
 const logger = require('@alias/logger')('growi:service:ConfigManager');
-const ConfigLoader = require('../service/config-loader');
+
+const parseISO = require('date-fns/parseISO');
+
+const S2sMessage = require('../models/vo/s2s-message');
+const S2sMessageHandlable = require('./s2s-messaging/handlable');
+
+const ConfigLoader = require('./config-loader');
 
 const KEYS_FOR_LOCAL_STRATEGY_USE_ONLY_ENV_OPTION = [
   'security:passport-local:isEnabled',
@@ -15,15 +21,29 @@ const KEYS_FOR_SAML_USE_ONLY_ENV_OPTION = [
   'security:passport-saml:attrMapFirstName',
   'security:passport-saml:attrMapLastName',
   'security:passport-saml:cert',
+  'security:passport-saml:ABLCRule',
 ];
 
-class ConfigManager {
+const KEYS_FOR_FIEL_UPLOAD_USE_ONLY_ENV_OPTION = [
+  'app:fileUploadType',
+];
+
+const KEYS_FOR_GCS_USE_ONLY_ENV_OPTION = [
+  'gcs:apiKeyJsonPath',
+  'gcs:bucket',
+  'gcs:uploadNamespace',
+];
+
+class ConfigManager extends S2sMessageHandlable {
 
   constructor(configModel) {
+    super();
+
     this.configModel = configModel;
     this.configLoader = new ConfigLoader(this.configModel);
     this.configObject = null;
     this.configKeys = [];
+    this.lastLoadedAt = null;
 
     this.getConfig = this.getConfig.bind(this);
   }
@@ -37,6 +57,16 @@ class ConfigManager {
 
     // cache all config keys
     this.reloadConfigKeys();
+
+    this.lastLoadedAt = new Date();
+  }
+
+  /**
+   * Set S2sMessagingServiceDelegator instance
+   * @param {S2sMessagingServiceDelegator} s2sMessagingService
+   */
+  async setS2sMessagingService(s2sMessagingService) {
+    this.s2sMessagingService = s2sMessagingService;
   }
 
   /**
@@ -66,7 +96,7 @@ class ConfigManager {
   }
 
   /**
-   * get a config specified by namespace and regular expresssion
+   * get a config specified by namespace and regular expression
    */
   getConfigByRegExp(namespace, regexp) {
     const result = {};
@@ -162,7 +192,7 @@ class ConfigManager {
    *  );
    * ```
    */
-  async updateConfigsInTheSameNamespace(namespace, configs) {
+  async updateConfigsInTheSameNamespace(namespace, configs, withoutPublishingS2sMessage) {
     const queries = [];
     for (const key of Object.keys(configs)) {
       queries.push({
@@ -176,7 +206,11 @@ class ConfigManager {
     await this.configModel.bulkWrite(queries);
 
     await this.loadConfigs();
-    this.reloadConfigKeys();
+
+    // publish updated date after reloading
+    if (this.s2sMessagingService != null && !withoutPublishingS2sMessage) {
+      this.publishUpdateMessage();
+    }
   }
 
   /**
@@ -193,6 +227,16 @@ class ConfigManager {
       || (
         KEYS_FOR_SAML_USE_ONLY_ENV_OPTION.includes(key)
         && this.defaultSearch('crowi', 'security:passport-saml:useOnlyEnvVarsForSomeOptions')
+      )
+      // file upload option
+      || (
+        KEYS_FOR_FIEL_UPLOAD_USE_ONLY_ENV_OPTION.includes(key)
+        && this.searchOnlyFromEnvVarConfigs('crowi', 'app:useOnlyEnvVarForFileUploadType')
+      )
+      // gcs option
+      || (
+        KEYS_FOR_GCS_USE_ONLY_ENV_OPTION.includes(key)
+        && this.searchOnlyFromEnvVarConfigs('crowi', 'gcs:useOnlyEnvVarsForSomeOptions')
       )
     ));
   }
@@ -284,6 +328,37 @@ class ConfigManager {
 
   convertInsertValue(value) {
     return JSON.stringify(value === '' ? null : value);
+  }
+
+  async publishUpdateMessage() {
+    const s2sMessage = new S2sMessage('configUpdated', { updatedAt: new Date() });
+
+    try {
+      await this.s2sMessagingService.publish(s2sMessage);
+    }
+    catch (e) {
+      logger.error('Failed to publish update message with S2sMessagingService: ', e.message);
+    }
+  }
+
+  /**
+   * @inheritdoc
+   */
+  shouldHandleS2sMessage(s2sMessage) {
+    const { eventName, updatedAt } = s2sMessage;
+    if (eventName !== 'configUpdated' || updatedAt == null) {
+      return false;
+    }
+
+    return this.lastLoadedAt == null || this.lastLoadedAt < parseISO(s2sMessage.updatedAt);
+  }
+
+  /**
+   * @inheritdoc
+   */
+  async handleS2sMessage(s2sMessage) {
+    logger.info('Reload configs by pubsub notification');
+    return this.loadConfigs();
   }
 
 }

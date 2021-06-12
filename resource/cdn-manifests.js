@@ -2,7 +2,8 @@ module.exports = {
   js: [
     {
       name: 'basis',
-      url: 'https://cdn.jsdelivr.net/combine/npm/emojione@3.1.2,npm/jquery@3.4.0,npm/bootstrap@3.4.1/dist/js/bootstrap.min.js',
+      // eslint-disable-next-line max-len
+      url: 'https://cdn.jsdelivr.net/combine/npm/emojione@3.1.2,npm/jquery@3.4.0,npm/popper.js@1.15.0,npm/bootstrap@4.5.0/dist/js/bootstrap.min.js,npm/scrollpos-styler@0.7.1,npm/jquery-slimscroll@1.3.8/jquery.slimscroll.min.js',
       groups: ['basis'],
       args: {
         integrity: '',
@@ -38,7 +39,15 @@ module.exports = {
     },
     {
       name: 'mathjax',
-      url: 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js',
+      url: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js',
+      args: {
+        async: true,
+        integrity: '',
+      },
+    },
+    {
+      name: 'drawio-viewer',
+      url: 'https://jgraph.github.io/drawio/src/main/webapp/js/viewer.min.js',
       args: {
         async: true,
         integrity: '',
@@ -46,28 +55,28 @@ module.exports = {
     },
     {
       name: 'codemirror-dialog',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/addon/dialog/dialog.min.js',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/addon/dialog/dialog.min.js',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-keymap-vim',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/keymap/vim.min.js',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/keymap/vim.min.js',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-keymap-emacs',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/keymap/emacs.min.js',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/keymap/emacs.min.js',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-keymap-sublime',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/keymap/sublime.min.js',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/keymap/sublime.min.js',
       args: {
         integrity: '',
       },
@@ -122,8 +131,24 @@ module.exports = {
       },
     },
     {
+      name: 'material-icons',
+      url: 'https://cdn.jsdelivr.net/npm/material-icons@0.3.1/iconfont/material-icons.min.css',
+      groups: ['basis'],
+      args: {
+        integrity: '',
+      },
+    },
+    {
       name: 'emojione',
       url: 'https://cdn.jsdelivr.net/npm/emojione@3.1.2/extras/css/emojione.min.css',
+      groups: ['basis'],
+      args: {
+        integrity: '',
+      },
+    },
+    {
+      name: 'animate.css',
+      url: 'https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css',
       groups: ['basis'],
       args: {
         integrity: '',
@@ -145,63 +170,63 @@ module.exports = {
     },
     {
       name: 'codemirror-dialog',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/addon/dialog/dialog.min.css',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/addon/dialog/dialog.min.css',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-theme-eclipse',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/theme/eclipse.min.css',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/theme/eclipse.min.css',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-theme-elegant',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/theme/elegant.min.css',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/theme/elegant.min.css',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-theme-neo',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/theme/neo.min.css',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/theme/neo.min.css',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-theme-mdn-like',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/theme/mdn-like.min.css',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/theme/mdn-like.min.css',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-theme-material',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/theme/material.min.css',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/theme/material.min.css',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-theme-dracula',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/theme/dracula.min.css',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/theme/dracula.min.css',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-theme-monokai',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/theme/monokai.min.css',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/theme/monokai.min.css',
       args: {
         integrity: '',
       },
     },
     {
       name: 'codemirror-theme-twilight',
-      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.42.0/theme/twilight.min.css',
+      url: 'https://cdn.jsdelivr.net/npm/codemirror@5.48.4/theme/twilight.min.css',
       args: {
         integrity: '',
       },

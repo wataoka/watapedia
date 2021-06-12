@@ -1,6 +1,7 @@
 import { Container } from 'unstated';
 
 import axios from 'axios';
+import urljoin from 'url-join';
 
 import InterceptorManager from '@commons/service/interceptor-manager';
 
@@ -8,11 +9,13 @@ import emojiStrategy from '../util/emojione/emoji_strategy_shrinked.json';
 import GrowiRenderer from '../util/GrowiRenderer';
 
 import {
-  DetachCodeBlockInterceptor,
-  RestoreCodeBlockInterceptor,
-} from '../util/interceptor/detach-code-blocks';
+  mediaQueryListForDarkMode,
+  applyColorScheme,
+} from '../util/color-scheme';
+import Apiv1ErrorHandler from '../util/apiv1ErrorHandler';
 
-import i18nFactory from '../util/i18n';
+import { i18nFactory } from '../util/i18n';
+import apiv3ErrorHandler from '../util/apiv3ErrorHandler';
 
 /**
  * Service container related to options for Application
@@ -24,50 +27,51 @@ export default class AppContainer extends Container {
     super();
 
     this.state = {
-      editorMode: null,
+      preferDarkModeByMediaQuery: false,
+
+      // stetes for contents
+      recentlyUpdatedPages: [],
     };
 
     const body = document.querySelector('body');
 
-    this.me = body.dataset.currentUsername || null; // will be initialized with null when data is empty string
-    this.isAdmin = body.dataset.isAdmin === 'true';
     this.csrfToken = body.dataset.csrftoken;
-    this.isPluginEnabled = body.dataset.pluginEnabled === 'true';
-    this.isLoggedin = document.querySelector('.main-container.nologin') == null;
 
-    this.config = JSON.parse(document.getElementById('crowi-context-hydrate').textContent || '{}');
+    this.config = JSON.parse(document.getElementById('growi-context-hydrate').textContent || '{}');
 
     const userAgent = window.navigator.userAgent.toLowerCase();
     this.isMobile = /iphone|ipad|android/.test(userAgent);
 
-    this.isDocSaved = true;
-
-    this.originRenderer = new GrowiRenderer(this);
-
-    this.interceptorManager = new InterceptorManager();
-    this.interceptorManager.addInterceptor(new DetachCodeBlockInterceptor(this), 10); // process as soon as possible
-    this.interceptorManager.addInterceptor(new RestoreCodeBlockInterceptor(this), 900); // process as late as possible
-
-    const userlang = body.dataset.userlang;
-    this.i18n = i18nFactory(userlang);
-
-    this.users = [];
-    this.userByName = {};
-    this.userById = {};
-    this.recoverData();
-
-    if (this.isLoggedin) {
-      this.fetchUsers();
+    const currentUserElem = document.getElementById('growi-current-user');
+    if (currentUserElem != null) {
+      this.currentUser = JSON.parse(currentUserElem.textContent);
     }
+
+    const isSharedPageElem = document.getElementById('is-shared-page');
+
+    // check what kind of user
+    this.isGuestUser = this.currentUser == null;
+    this.isSharedUser = isSharedPageElem != null && this.currentUser == null;
+
+    const userLocaleId = this.currentUser?.lang;
+    this.i18n = i18nFactory(userLocaleId);
 
     this.containerInstances = {};
     this.componentInstances = {};
     this.rendererInstances = {};
 
-    this.fetchUsers = this.fetchUsers.bind(this);
     this.apiGet = this.apiGet.bind(this);
     this.apiPost = this.apiPost.bind(this);
+    this.apiDelete = this.apiDelete.bind(this);
     this.apiRequest = this.apiRequest.bind(this);
+
+    this.apiv3Root = '/_api/v3';
+    this.apiv3 = {
+      get: this.apiv3Get.bind(this),
+      post: this.apiv3Post.bind(this),
+      put: this.apiv3Put.bind(this),
+      delete: this.apiv3Delete.bind(this),
+    };
   }
 
   /**
@@ -77,11 +81,51 @@ export default class AppContainer extends Container {
     return 'AppContainer';
   }
 
-  initPlugins() {
-    if (this.isPluginEnabled) {
-      const growiPlugin = window.growiPlugin;
-      growiPlugin.installAll(this, this.originRenderer);
+  initApp() {
+    this.initMediaQueryForColorScheme();
+
+    this.injectToWindow();
+  }
+
+  initContents() {
+    const body = document.querySelector('body');
+
+    this.isAdmin = body.dataset.isAdmin === 'true';
+
+    this.isDocSaved = true;
+
+    this.originRenderer = new GrowiRenderer(this);
+
+    this.interceptorManager = new InterceptorManager();
+
+    if (this.currentUser != null) {
+      // remove old user cache
+      this.removeOldUserCache();
     }
+
+    const isPluginEnabled = body.dataset.pluginEnabled === 'true';
+    if (isPluginEnabled) {
+      this.initPlugins();
+    }
+
+    this.injectToWindow();
+  }
+
+  async initMediaQueryForColorScheme() {
+    const switchStateByMediaQuery = async(mql) => {
+      const preferDarkMode = mql.matches;
+      this.setState({ preferDarkModeByMediaQuery: preferDarkMode });
+
+      applyColorScheme();
+    };
+
+    // add event listener
+    mediaQueryListForDarkMode.addListener(switchStateByMediaQuery);
+  }
+
+  initPlugins() {
+    const growiPlugin = window.growiPlugin;
+    growiPlugin.installAll(this, this.originRenderer);
   }
 
   injectToWindow() {
@@ -94,6 +138,20 @@ export default class AppContainer extends Container {
     window.crowi = this;
     window.crowiRenderer = originRenderer;
     window.crowiPlugin = window.growiPlugin;
+  }
+
+  get currentUserId() {
+    if (this.currentUser == null) {
+      return null;
+    }
+    return this.currentUser._id;
+  }
+
+  get currentUsername() {
+    if (this.currentUser == null) {
+      return null;
+    }
+    return this.currentUser.username;
   }
 
   /**
@@ -161,6 +219,28 @@ export default class AppContainer extends Container {
     return this.componentInstances[id];
   }
 
+  /**
+   *
+   * @param {string} breakpoint id of breakpoint
+   * @param {function} handler event handler for media query
+   * @param {boolean} invokeOnInit invoke handler after the initialization if true
+   */
+  addBreakpointListener(breakpoint, handler, invokeOnInit = false) {
+    document.addEventListener('DOMContentLoaded', () => {
+      // get the value of '--breakpoint-*'
+      const breakpointPixel = parseInt(window.getComputedStyle(document.documentElement).getPropertyValue(`--breakpoint-${breakpoint}`), 10);
+
+      const mediaQuery = window.matchMedia(`(min-width: ${breakpointPixel}px)`);
+
+      // add event listener
+      mediaQuery.addListener(handler);
+      // initialize
+      if (invokeOnInit) {
+        handler(mediaQuery);
+      }
+    });
+  }
+
   getOriginRenderer() {
     return this.originRenderer;
   }
@@ -187,85 +267,21 @@ export default class AppContainer extends Container {
     return emojiStrategy;
   }
 
-  recoverData() {
-    const keys = [
-      'userByName',
-      'userById',
-      'users',
-    ];
-
-    keys.forEach((key) => {
-      const keyContent = window.localStorage[key];
-      if (keyContent) {
-        try {
-          this[key] = JSON.parse(keyContent);
-        }
-        catch (e) {
-          window.localStorage.removeItem(key);
-        }
-      }
-    });
-  }
-
-  fetchUsers() {
-    const interval = 1000 * 60 * 15; // 15min
-    const currentTime = new Date();
-    if (window.localStorage.lastFetched && interval > currentTime - new Date(window.localStorage.lastFetched)) {
+  removeOldUserCache() {
+    if (window.localStorage.userByName == null) {
       return;
     }
 
-    this.apiGet('/users.list', {})
-      .then((data) => {
-        this.users = data.users;
-        window.localStorage.users = JSON.stringify(data.users);
+    const keys = ['userByName', 'userById', 'users', 'lastFetched'];
 
-        const userByName = {};
-        const userById = {};
-        for (let i = 0; i < data.users.length; i++) {
-          const user = data.users[i];
-          userByName[user.username] = user;
-          userById[user._id] = user;
-        }
-        this.userByName = userByName;
-        window.localStorage.userByName = JSON.stringify(userByName);
-
-        this.userById = userById;
-        window.localStorage.userById = JSON.stringify(userById);
-
-        window.localStorage.lastFetched = new Date();
-      })
-      .catch((err) => {
-        window.localStorage.removeItem('lastFetched');
-      // ignore errors
-      });
+    keys.forEach((key) => {
+      window.localStorage.removeItem(key);
+    });
   }
 
-  findUserById(userId) {
-    if (this.userById && this.userById[userId]) {
-      return this.userById[userId];
-    }
-
-    return null;
-  }
-
-  findUserByIds(userIds) {
-    const users = [];
-    for (const userId of userIds) {
-      const user = this.findUserById(userId);
-      if (user) {
-        users.push(user);
-      }
-    }
-
-    return users;
-  }
-
-  findUser(username) {
-    if (this.userByName && this.userByName[username]) {
-      return this.userByName[username];
-    }
-
-    return null;
+  async retrieveRecentlyUpdated() {
+    const { data } = await this.apiv3Get('/pages/recent');
+    this.setState({ recentlyUpdatedPages: data.pages });
   }
 
   launchHandsontableModal(componentKind, beginLineNumber, endLineNumber) {
@@ -278,11 +294,21 @@ export default class AppContainer extends Container {
     targetComponent.launchHandsontableModal(beginLineNumber, endLineNumber);
   }
 
-  apiGet(path, params) {
+  launchDrawioModal(componentKind, beginLineNumber, endLineNumber) {
+    let targetComponent;
+    switch (componentKind) {
+      case 'page':
+        targetComponent = this.getComponentInstance('Page');
+        break;
+    }
+    targetComponent.launchDrawioModal(beginLineNumber, endLineNumber);
+  }
+
+  async apiGet(path, params) {
     return this.apiRequest('get', path, { params });
   }
 
-  apiPost(path, params) {
+  async apiPost(path, params) {
     if (!params._csrf) {
       params._csrf = this.csrfToken;
     }
@@ -290,21 +316,66 @@ export default class AppContainer extends Container {
     return this.apiRequest('post', path, params);
   }
 
-  apiRequest(method, path, params) {
-    return new Promise((resolve, reject) => {
-      axios[method](`/_api${path}`, params)
-        .then((res) => {
-          if (res.data.ok) {
-            resolve(res.data);
-          }
-          else {
-            reject(new Error(res.data.error));
-          }
-        })
-        .catch((res) => {
-          reject(res);
-        });
-    });
+  async apiDelete(path, params) {
+    if (!params._csrf) {
+      params._csrf = this.csrfToken;
+    }
+
+    return this.apiRequest('delete', path, { data: params });
+  }
+
+  async apiRequest(method, path, params) {
+    const res = await axios[method](`/_api${path}`, params);
+    if (res.data.ok) {
+      return res.data;
+    }
+
+    // Return error code if code is exist
+    if (res.data.code != null) {
+      const error = new Apiv1ErrorHandler(res.data.error, res.data.code);
+      throw error;
+    }
+
+    throw new Error(res.data.error);
+  }
+
+  async apiv3Request(method, path, params) {
+    try {
+      const res = await axios[method](urljoin(this.apiv3Root, path), params);
+      return res.data;
+    }
+    catch (err) {
+      const errors = apiv3ErrorHandler(err);
+      throw errors;
+    }
+  }
+
+  async apiv3Get(path, params) {
+    return this.apiv3Request('get', path, { params });
+  }
+
+  async apiv3Post(path, params = {}) {
+    if (!params._csrf) {
+      params._csrf = this.csrfToken;
+    }
+
+    return this.apiv3Request('post', path, params);
+  }
+
+  async apiv3Put(path, params = {}) {
+    if (!params._csrf) {
+      params._csrf = this.csrfToken;
+    }
+
+    return this.apiv3Request('put', path, params);
+  }
+
+  async apiv3Delete(path, params = {}) {
+    if (!params._csrf) {
+      params._csrf = this.csrfToken;
+    }
+
+    return this.apiv3Request('delete', path, { params });
   }
 
 }

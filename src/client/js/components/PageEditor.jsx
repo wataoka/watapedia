@@ -1,6 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import loggerFactory from '@alias/logger';
+import detectIndent from 'detect-indent';
 
 import { throttle, debounce } from 'throttle-debounce';
 import { envUtils } from 'growi-commons';
@@ -8,7 +9,7 @@ import { envUtils } from 'growi-commons';
 import AppContainer from '../services/AppContainer';
 import PageContainer from '../services/PageContainer';
 
-import { createSubscribedElement } from './UnstatedUtils';
+import { withUnstatedContainers } from './UnstatedUtils';
 import Editor from './PageEditor/Editor';
 import Preview from './PageEditor/Preview';
 import scrollSyncHelper from './PageEditor/ScrollSyncHelper';
@@ -20,6 +21,8 @@ class PageEditor extends React.Component {
 
   constructor(props) {
     super(props);
+
+    this.previewElement = React.createRef();
 
     const config = this.props.appContainer.getConfig();
     const isUploadable = config.upload.image || config.upload.file;
@@ -44,9 +47,6 @@ class PageEditor extends React.Component {
     this.saveDraft = this.saveDraft.bind(this);
     this.clearDraft = this.clearDraft.bind(this);
 
-    // get renderer
-    this.growiRenderer = this.props.appContainer.getRenderer('editor');
-
     // for scrolling
     this.lastScrolledDateWithCursor = null;
     this.isOriginOfScrollSyncEditor = false;
@@ -56,15 +56,23 @@ class PageEditor extends React.Component {
     this.scrollPreviewByEditorLineWithThrottle = throttle(20, this.scrollPreviewByEditorLine);
     this.scrollPreviewByCursorMovingWithThrottle = throttle(20, this.scrollPreviewByCursorMoving);
     this.scrollEditorByPreviewScrollWithThrottle = throttle(20, this.scrollEditorByPreviewScroll);
-    this.renderPreviewWithDebounce = debounce(50, throttle(100, this.renderPreview));
+    this.setMarkdownStateWithDebounce = debounce(50, throttle(100, (value) => {
+      this.setState({ markdown: value });
+    }));
     this.saveDraftWithDebounce = debounce(800, this.saveDraft);
+
+    // Detect indent size from contents (only when users are allowed to change it)
+    // TODO: https://youtrack.weseek.co.jp/issue/GW-5368
+    if (!this.props.appContainer.config.isIndentSizeForced && this.state.markdown) {
+      const detectedIndent = detectIndent(this.state.markdown);
+      if (detectedIndent.type === 'space' && new Set([2, 4]).has(detectedIndent.amount)) {
+        this.props.editorContainer.setState({ indentSize: detectedIndent.amount });
+      }
+    }
   }
 
   componentWillMount() {
     this.props.appContainer.registerComponentInstance('PageEditor', this);
-
-    // initial rendering
-    this.renderPreview(this.state.markdown);
   }
 
   getMarkdown() {
@@ -93,8 +101,23 @@ class PageEditor extends React.Component {
    * @param {string} value
    */
   onMarkdownChanged(value) {
-    this.renderPreviewWithDebounce(value);
-    this.saveDraftWithDebounce();
+    const { pageContainer } = this.props;
+    this.setMarkdownStateWithDebounce(value);
+    // only when the first time to edit
+    if (!pageContainer.state.revisionId) {
+      this.saveDraftWithDebounce();
+    }
+  }
+
+  // Displays an alert if there is a difference with pageContainer's markdown
+  componentDidUpdate(prevProps, prevState) {
+    const { pageContainer, editorContainer } = this.props;
+
+    if (this.state.markdown !== prevState.markdown) {
+      if (pageContainer.state.markdown !== this.state.markdown) {
+        editorContainer.enableUnsavedWarning();
+      }
+    }
   }
 
   /**
@@ -128,7 +151,7 @@ class PageEditor extends React.Component {
    * @param {any} file
    */
   async onUpload(file) {
-    const { appContainer, pageContainer } = this.props;
+    const { appContainer, pageContainer, editorContainer } = this.props;
 
     try {
       let res = await appContainer.apiGet('/attachments.limit', {
@@ -163,7 +186,8 @@ class PageEditor extends React.Component {
       // when if created newly
       if (res.pageCreated) {
         logger.info('Page is created', res.page._id);
-        pageContainer.updateStateAfterSave(res.page);
+        pageContainer.updateStateAfterSave(res.page, res.tags, res.revision);
+        editorContainer.setState({ grant: res.page.grant });
       }
     }
     catch (e) {
@@ -274,50 +298,11 @@ class PageEditor extends React.Component {
 
   saveDraft() {
     const { pageContainer, editorContainer } = this.props;
-    // only when the first time to edit
-    if (!pageContainer.state.revisionId) {
-      editorContainer.saveDraft(pageContainer.state.path, this.state.markdown);
-    }
-    editorContainer.enableUnsavedWarning();
+    editorContainer.saveDraft(pageContainer.state.path, this.state.markdown);
   }
 
   clearDraft() {
     this.props.editorContainer.clearDraft(this.props.pageContainer.state.path);
-  }
-
-  renderPreview(value) {
-    this.setState({ markdown: value });
-
-    // render html
-    const context = {
-      markdown: this.state.markdown,
-      currentPagePath: decodeURIComponent(window.location.pathname),
-    };
-
-    const growiRenderer = this.growiRenderer;
-    const interceptorManager = this.props.appContainer.interceptorManager;
-    interceptorManager.process('preRenderPreview', context)
-      .then(() => { return interceptorManager.process('prePreProcess', context) })
-      .then(() => {
-        context.markdown = growiRenderer.preProcess(context.markdown);
-      })
-      .then(() => { return interceptorManager.process('postPreProcess', context) })
-      .then(() => {
-        const parsedHTML = growiRenderer.process(context.markdown);
-        context.parsedHTML = parsedHTML;
-      })
-      .then(() => { return interceptorManager.process('prePostProcess', context) })
-      .then(() => {
-        context.parsedHTML = growiRenderer.postProcess(context.parsedHTML);
-      })
-      .then(() => { return interceptorManager.process('postPostProcess', context) })
-      .then(() => { return interceptorManager.process('preRenderPreviewHtml', context) })
-      .then(() => {
-        this.setState({ html: context.parsedHTML });
-      })
-      // process interceptors for post rendering
-      .then(() => { return interceptorManager.process('postRenderPreviewHtml', context) });
-
   }
 
   render() {
@@ -326,8 +311,8 @@ class PageEditor extends React.Component {
     const emojiStrategy = this.props.appContainer.getEmojiStrategy();
 
     return (
-      <div className="row">
-        <div className="col-md-6 col-sm-12 page-editor-editor-container">
+      <div className="d-flex flex-wrap">
+        <div className="page-editor-editor-container flex-grow-1 flex-basis-0 mw-0">
           <Editor
             ref={(c) => { this.editor = c }}
             value={this.state.markdown}
@@ -343,9 +328,9 @@ class PageEditor extends React.Component {
             onSave={this.onSaveWithShortcut}
           />
         </div>
-        <div className="col-md-6 hidden-sm hidden-xs page-editor-preview-container">
+        <div className="d-none d-lg-block page-editor-preview-container flex-grow-1 flex-basis-0 mw-0">
           <Preview
-            html={this.state.html}
+            markdown={this.state.markdown}
             // eslint-disable-next-line no-return-assign
             inputRef={(el) => { return this.previewElement = el }}
             isMathJaxEnabled={this.state.isMathJaxEnabled}
@@ -362,9 +347,7 @@ class PageEditor extends React.Component {
 /**
  * Wrapper component for using unstated
  */
-const PageEditorWrapper = (props) => {
-  return createSubscribedElement(PageEditor, props, [AppContainer, PageContainer, EditorContainer]);
-};
+const PageEditorWrapper = withUnstatedContainers(PageEditor, [AppContainer, PageContainer, EditorContainer]);
 
 PageEditor.propTypes = {
   appContainer: PropTypes.instanceOf(AppContainer).isRequired,

@@ -1,6 +1,7 @@
 const debug = require('debug')('growi:service:ConfigLoader');
-
 const { envUtils } = require('growi-commons');
+const isSecurityEnv = require('../../lib/util/isSecurityEnv');
+
 
 const TYPES = {
   NUMBER:  { parse: (v) => { return parseInt(v, 10) } },
@@ -22,18 +23,18 @@ const TYPES = {
  *  So, parameters of these are under consideration.
  */
 const ENV_VAR_NAME_TO_CONFIG_INFO = {
-  // ELASTICSEARCH_URI: {
-  //   ns:      ,
-  //   key:     ,
-  //   type:    ,
-  //   default:
-  // },
-  // FILE_UPLOAD: {
-  //   ns:      ,
-  //   key:     ,
-  //   type:    ,
-  //   default:
-  // },
+  FILE_UPLOAD: {
+    ns:      'crowi',
+    key:     'app:fileUploadType',
+    type:    TYPES.STRING,
+    default: 'aws',
+  },
+  FILE_UPLOAD_USES_ONLY_ENV_VAR_FOR_FILE_UPLOAD_TYPE: {
+    ns:      'crowi',
+    key:     'app:useOnlyEnvVarForFileUploadType',
+    type:    TYPES.BOOLEAN,
+    default: false,
+  },
   // HACKMD_URI: {
   //   ns:      ,
   //   key:     ,
@@ -112,6 +113,18 @@ const ENV_VAR_NAME_TO_CONFIG_INFO = {
   //   type:    ,
   //   default:
   // },
+  DRAWIO_URI: {
+    ns:      'crowi',
+    key:     'app:drawioUri',
+    type:    TYPES.STRING,
+    default: null,
+  },
+  NCHAN_URI: {
+    ns:      'crowi',
+    key:     'app:nchanUri',
+    type:    TYPES.STRING,
+    default: null,
+  },
   APP_SITE_URL: {
     ns:      'crowi',
     key:     'app:siteUrl',
@@ -124,23 +137,122 @@ const ENV_VAR_NAME_TO_CONFIG_INFO = {
     type:    TYPES.BOOLEAN,
     default: false,
   },
+  S2SMSG_PUBSUB_SERVER_TYPE: {
+    ns:      'crowi',
+    key:     's2sMessagingPubsub:serverType',
+    type:    TYPES.STRING,
+    default: null,
+  },
+  S2SMSG_PUBSUB_NCHAN_PUBLISH_PATH: {
+    ns:      'crowi',
+    key:     's2sMessagingPubsub:nchan:publishPath',
+    type:    TYPES.STRING,
+    default: '/pubsub',
+  },
+  S2SMSG_PUBSUB_NCHAN_SUBSCRIBE_PATH: {
+    ns:      'crowi',
+    key:     's2sMessagingPubsub:nchan:subscribePath',
+    type:    TYPES.STRING,
+    default: '/pubsub',
+  },
+  S2SMSG_PUBSUB_NCHAN_CHANNEL_ID: {
+    ns:      'crowi',
+    key:     's2sMessagingPubsub:nchan:channelId',
+    type:    TYPES.STRING,
+    default: null,
+  },
+  S2CMSG_PUBSUB_CONNECTIONS_LIMIT: {
+    ns:      'crowi',
+    key:     's2cMessagingPubsub:connectionsLimit',
+    type:    TYPES.NUMBER,
+    default: 5000,
+  },
+  S2CMSG_PUBSUB_CONNECTIONS_LIMIT_FOR_ADMIN: {
+    ns:      'crowi',
+    key:     's2cMessagingPubsub:connectionsLimitForAdmin',
+    type:    TYPES.NUMBER,
+    default: 100,
+  },
+  S2CMSG_PUBSUB_CONNECTIONS_LIMIT_FOR_GUEST: {
+    ns:      'crowi',
+    key:     's2cMessagingPubsub:connectionsLimitForGuest',
+    type:    TYPES.NUMBER,
+    default: 2000,
+  },
   MAX_FILE_SIZE: {
     ns:      'crowi',
     key:     'app:maxFileSize',
     type:    TYPES.NUMBER,
     default: Infinity,
   },
+  FILE_UPLOAD_TOTAL_LIMIT: {
+    ns:      'crowi',
+    key:     'app:fileUploadTotalLimit',
+    type:    TYPES.NUMBER,
+    default: Infinity,
+  },
+  FILE_UPLOAD_DISABLED: {
+    ns:      'crowi',
+    key:     'app:fileUploadDisabled',
+    type:    TYPES.BOOLEAN,
+    default: false,
+  },
+  FILE_UPLOAD_LOCAL_USE_INTERNAL_REDIRECT: {
+    ns:      'crowi',
+    key:     'fileUpload:local:useInternalRedirect',
+    type:    TYPES.BOOLEAN,
+    default: false,
+  },
+  FILE_UPLOAD_LOCAL_INTERNAL_REDIRECT_PATH: {
+    ns:      'crowi',
+    key:     'fileUpload:local:internalRedirectPath',
+    type:    TYPES.STRING,
+    default: '/growi-internal/',
+  },
+  ELASTICSEARCH_URI: {
+    ns:      'crowi',
+    key:     'app:elasticsearchUri',
+    type:    TYPES.STRING,
+    default: null,
+  },
+  ELASTICSEARCH_REQUEST_TIMEOUT: {
+    ns:      'crowi',
+    key:     'app:elasticsearchRequestTimeout',
+    type:    TYPES.NUMBER,
+    default: 8000, // msec
+  },
+  SEARCHBOX_SSL_URL: {
+    ns:      'crowi',
+    key:     'app:searchboxSslUrl',
+    type:    TYPES.STRING,
+    default: null,
+  },
   MONGO_GRIDFS_TOTAL_LIMIT: {
     ns:      'crowi',
     key:     'gridfs:totalLimit',
     type:    TYPES.NUMBER,
-    default: Infinity,
+    default: null, // set null in default for backward compatibility
+    //                cz: Newer system respects FILE_UPLOAD_TOTAL_LIMIT.
+    //                    If the default value of MONGO_GRIDFS_TOTAL_LIMIT is Infinity,
+    //                      the system can't distinguish between "not specified" and "Infinity is specified".
   },
   FORCE_WIKI_MODE: {
     ns:      'crowi',
     key:     'security:wikiMode',
     type:    TYPES.STRING,
     default: undefined,
+  },
+  SESSION_MAX_AGE: {
+    ns:      'crowi',
+    key:     'security:sessionMaxAge',
+    type:    TYPES.NUMBER,
+    default: undefined,
+  },
+  USER_UPPER_LIMIT: {
+    ns:      'crowi',
+    key:     'security:userUpperLimit',
+    type:    TYPES.NUMBER,
+    default: Infinity,
   },
   LOCAL_STRATEGY_ENABLED: {
     ns:      'crowi',
@@ -220,6 +332,90 @@ const ENV_VAR_NAME_TO_CONFIG_INFO = {
     type:    TYPES.STRING,
     default: null,
   },
+  SAML_ABLC_RULE: {
+    ns:      'crowi',
+    key:     'security:passport-saml:ABLCRule',
+    type:    TYPES.STRING,
+    default: null,
+  },
+  S3_REFERENCE_FILE_WITH_RELAY_MODE: {
+    ns:      'crowi',
+    key:     'aws:referenceFileWithRelayMode',
+    type:    TYPES.BOOLEAN,
+    default: false,
+  },
+  S3_LIFETIME_SEC_FOR_TEMPORARY_URL: {
+    ns:      'crowi',
+    key:     'aws:lifetimeSecForTemporaryUrl',
+    type:    TYPES.NUMBER,
+    default: 120,
+  },
+  GCS_API_KEY_JSON_PATH: {
+    ns:      'crowi',
+    key:     'gcs:apiKeyJsonPath',
+    type:    TYPES.STRING,
+    default: null,
+  },
+  GCS_BUCKET: {
+    ns:      'crowi',
+    key:     'gcs:bucket',
+    type:    TYPES.STRING,
+    default: null,
+  },
+  GCS_UPLOAD_NAMESPACE: {
+    ns:      'crowi',
+    key:     'gcs:uploadNamespace',
+    type:    TYPES.STRING,
+    default: null,
+  },
+  GCS_REFERENCE_FILE_WITH_RELAY_MODE: {
+    ns:      'crowi',
+    key:     'gcs:referenceFileWithRelayMode',
+    type:    TYPES.BOOLEAN,
+    default: false,
+  },
+  GCS_USES_ONLY_ENV_VARS_FOR_SOME_OPTIONS: {
+    ns:      'crowi',
+    key:     'gcs:useOnlyEnvVarsForSomeOptions',
+    type:    TYPES.BOOLEAN,
+    default: false,
+  },
+  GCS_LIFETIME_SEC_FOR_TEMPORARY_URL: {
+    ns:      'crowi',
+    key:     'gcs:lifetimeSecForTemporaryUrl',
+    type:    TYPES.NUMBER,
+    default: 120,
+  },
+  PROMSTER_ENABLED: {
+    ns:      'crowi',
+    key:     'promster:isEnabled',
+    type:    TYPES.BOOLEAN,
+    default: false,
+  },
+  PROMSTER_PORT: {
+    ns:      'crowi',
+    key:     'promster:port',
+    type:    TYPES.NUMBER,
+    default: 7788,
+  },
+  GROWI_CLOUD_URI: {
+    ns:      'crowi',
+    key:     'app:growiCloudUri',
+    type:    TYPES.STRING,
+    default: null,
+  },
+  GROWI_APP_ID_FOR_GROWI_CLOUD: {
+    ns:      'crowi',
+    key:     'app:growiAppIdForCloud',
+    type:    TYPES.STRING,
+    default: null,
+  },
+  DEFAULT_EMAIL_PUBLISHED: {
+    ns:      'crowi',
+    key:     'customize:isEmailPublishedForNewUser',
+    type:    TYPES.BOOLEAN,
+    default: true,
+  },
 };
 
 class ConfigLoader {
@@ -235,13 +431,15 @@ class ConfigLoader {
     const configFromDB = await this.loadFromDB();
     const configFromEnvVars = this.loadFromEnvVars();
 
-    // merge defaults
-    let mergedConfigFromDB = Object.assign({ crowi: this.configModel.getDefaultCrowiConfigsObject() }, configFromDB);
-    mergedConfigFromDB = Object.assign({ markdown: this.configModel.getDefaultMarkdownConfigsObject() }, mergedConfigFromDB);
-    mergedConfigFromDB = Object.assign({ notification: this.configModel.getDefaultNotificationConfigsObject() }, mergedConfigFromDB);
+    // merge defaults per ns
+    const mergedConfigFromDB = {
+      crowi: Object.assign(this.configModel.getDefaultCrowiConfigsObject(), configFromDB.crowi),
+      markdown: Object.assign(this.configModel.getDefaultMarkdownConfigsObject(), configFromDB.markdown),
+      notification: Object.assign(this.configModel.getDefaultNotificationConfigsObject(), configFromDB.notification),
+    };
 
     // In getConfig API, only null is used as a value to indicate that a config is not set.
-    // So, if a value loaded from the database is emtpy,
+    // So, if a value loaded from the database is empty,
     // it is converted to null because an empty string is used as the same meaning in the config model.
     // By this processing, whether a value is loaded from the database or from the environment variable,
     // only null indicates a config is not set.
@@ -293,6 +491,28 @@ class ConfigLoader {
 
     debug('ConfigLoader#loadFromEnvVars', config);
 
+    return config;
+  }
+
+  /**
+   * get config from the environment variables for display admin page
+   *
+   * **use this only admin home page.**
+   */
+  static getEnvVarsForDisplay(avoidSecurity = false) {
+    const config = {};
+    for (const ENV_VAR_NAME of Object.keys(ENV_VAR_NAME_TO_CONFIG_INFO)) {
+      const configInfo = ENV_VAR_NAME_TO_CONFIG_INFO[ENV_VAR_NAME];
+      if (process.env[ENV_VAR_NAME] === undefined) {
+        continue;
+      }
+      if (isSecurityEnv(configInfo.key) && avoidSecurity) {
+        continue;
+      }
+      config[ENV_VAR_NAME] = configInfo.type.parse(process.env[ENV_VAR_NAME]);
+    }
+
+    debug('ConfigLoader#getEnvVarsForDisplay', config);
     return config;
   }
 

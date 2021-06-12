@@ -31,10 +31,10 @@ export default class Attachment extends React.Component {
 
     let fileInUse = '';
     if (this.props.inUse) {
-      fileInUse = <span className="attachment-in-use label label-info">In Use</span>;
+      fileInUse = <span className="attachment-in-use badge badge-pill badge-info">In Use</span>;
     }
 
-    const fileType = <span className="attachment-filetype label label-default">{attachment.fileFormat}</span>;
+    const fileType = <span className="attachment-filetype badge badge-pill badge-secondary">{attachment.fileFormat}</span>;
 
     const btnDownload = (this.props.isUserLoggedIn)
       ? (
@@ -54,20 +54,16 @@ export default class Attachment extends React.Component {
       : '';
 
     return (
-      <li className="attachment">
+      <div className="attachment mb-2">
         <span className="mr-1 attachment-userpicture">
           <UserPicture user={attachment.creator} size="sm"></UserPicture>
         </span>
-
-        <a href={attachment.filePathProxied}><i className={formatIcon}></i> {attachment.originalName}</a>
-
-        {fileType}
-
-        {fileInUse}
-
-        {btnDownload}
-        {btnTrash}
-      </li>
+        <a className="mr-2" href={attachment.filePathProxied}><i className={formatIcon}></i> {attachment.originalName}</a>
+        <span className="mr-2">{fileType}</span>
+        <span className="mr-2">{fileInUse}</span>
+        <span className="mr-2">{btnDownload}</span>
+        <span className="mr-2">{btnTrash}</span>
+      </div>
     );
   }
 

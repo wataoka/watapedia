@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 
 import RevisionLoader from '../Page/RevisionLoader';
 import AppContainer from '../../services/AppContainer';
-import { createSubscribedElement } from '../UnstatedUtils';
+import { withUnstatedContainers } from '../UnstatedUtils';
 
 class SearchResultList extends React.Component {
 
@@ -15,12 +15,17 @@ class SearchResultList extends React.Component {
 
   render() {
     const resultList = this.props.pages.map((page) => {
+      const showTags = (page.tags != null) && (page.tags.length > 0);
+
       return (
-        <div id={page._id} key={page._id} className="search-result-page mb-5">
-          <h2><a href={page.path}>{page.path}</a></h2>
-          { page.tags.length > 0 && (
-            <span><i className="tag-icon icon-tag"></i> {page.tags.join(', ')}</span>
-          )}
+        // Add prefix 'id_' in id attr, because scrollspy of bootstrap doesn't work when the first letter of id of target component is numeral.
+        <div id={`id_${page._id}`} key={page._id} className="search-result-page mb-5">
+          <h2>
+            <a href={page.path} className="text-break">{page.path}</a>
+            { showTags && (
+              <div className="mt-1 small"><i className="tag-icon icon-tag"></i> {page.tags.join(', ')}</div>
+            )}
+          </h2>
           <RevisionLoader
             growiRenderer={this.growiRenderer}
             pageId={page._id}
@@ -44,9 +49,7 @@ class SearchResultList extends React.Component {
 /**
  * Wrapper component for using unstated
  */
-const SearchResultListWrapper = (props) => {
-  return createSubscribedElement(SearchResultList, props, [AppContainer]);
-};
+const SearchResultListWrapper = withUnstatedContainers(SearchResultList, [AppContainer]);
 
 SearchResultList.propTypes = {
   appContainer: PropTypes.instanceOf(AppContainer).isRequired,

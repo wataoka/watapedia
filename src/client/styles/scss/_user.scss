@@ -1,93 +1,55 @@
-.main-container {
-  .user-page-header {
-    #revision-path {
-      margin-bottom: 0;
-    }
+$easeInOutCubic: cubic-bezier(0.65, 0, 0.35, 1);
 
-    .users-meta {
-      margin-left: 30px;
-    }
+%transitionForCompactMode {
+  // set transition-duration (normal -> compact)
+  transition: all 300ms $easeInOutCubic;
+}
 
-    h1 {
-      margin: 0;
-      font-size: 2.5em;
-      color: #666;
-    }
-
-    .picture {
-      width: 64px;
-      height: 64px;
-    }
-
-    .user-page-meta {
-      color: #999;
-
-      ul {
-        padding-left: 0;
-
-        li {
-          list-style: none;
-        }
-      }
-
-      .user-page-username {
-        font-weight: bold;
-      }
-
-      .user-page-email {}
-
-      .user-page-introduction {}
-    }
-
-    .btn-like,
-    .btn-bookmark {
-      &.btn-lg {
-        padding: 8px;
-        font-size: 1.5em;
-      }
-    }
+/*
+ * Styles
+ */
+.grw-users-info {
+  .users-meta {
+    margin-left: 30px;
   }
 
-  // affix
-  .user-page-header.affix {
-    .users-meta {
-      margin-left: 15px;
-    }
-
-    h1 {
-      font-size: 1.5em;
-      line-height: 30px;
-    }
-
-    .picture {
-      width: 48px;
-      height: 48px;
-    }
+  .user-page-name {
+    margin: 0;
+    font-size: 2.5em;
+    color: $secondary;
   }
 
-  .user-page-content {
-    #user-draft-list {
-      #draft-list {
-        .panel-title {
-          width: 100%;
+  .picture {
+    width: 120px;
+    height: 120px;
+  }
 
-          .label-draft {
-            padding: 1px 5px;
-            margin: 0 0 0 4px;
-            font-weight: normal;
-          }
-        }
+  div.user-page-meta {
+    padding-left: 0;
+    color: $gray-400;
 
-        a {
+    .user-page-username {
+      font-weight: bold;
+    }
+  }
+}
 
-          .icon-copy,
-          .draft-delete,
-          .icon-edit {
-            margin: 0 0 0 4px;
-            cursor: pointer;
-          }
-        }
-      }
+.draft-list-item {
+  .icon-container {
+    .icon-copy,
+    .draft-delete,
+    .icon-edit {
+      cursor: pointer;
+    }
+  }
+}
+
+.user-page-footer {
+  .grw-user-page-list-m {
+    svg {
+      width: 35px;
+      height: 35px;
+      margin-bottom: 6px;
     }
   }
 }

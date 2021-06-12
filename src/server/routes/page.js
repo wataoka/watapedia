@@ -1,3 +1,131 @@
+const { isCreatablePage } = require('@commons/util/path-utils');
+const { serializePageSecurely } = require('../models/serializers/page-serializer');
+const { serializeRevisionSecurely } = require('../models/serializers/revision-serializer');
+const { serializeUserSecurely } = require('../models/serializers/user-serializer');
+
+/**
+ * @swagger
+ *  tags:
+ *    name: Pages
+ */
+
+/**
+ * @swagger
+ *
+ *  components:
+ *    schemas:
+ *      Page:
+ *        description: Page
+ *        type: object
+ *        properties:
+ *          _id:
+ *            type: string
+ *            description: page ID
+ *            example: 5e07345972560e001761fa63
+ *          __v:
+ *            type: number
+ *            description: DB record version
+ *            example: 0
+ *          commentCount:
+ *            type: number
+ *            description: count of comments
+ *            example: 3
+ *          createdAt:
+ *            type: string
+ *            description: date created at
+ *            example: 2010-01-01T00:00:00.000Z
+ *          creator:
+ *            $ref: '#/components/schemas/User'
+ *          extended:
+ *            type: object
+ *            description: extend data
+ *            example: {}
+ *          grant:
+ *            type: number
+ *            description: grant
+ *            example: 1
+ *          grantedUsers:
+ *            type: array
+ *            description: granted users
+ *            items:
+ *              type: string
+ *              description: user ID
+ *            example: ["5ae5fccfc5577b0004dbd8ab"]
+ *          lastUpdateUser:
+ *            $ref: '#/components/schemas/User'
+ *          liker:
+ *            type: array
+ *            description: granted users
+ *            items:
+ *              type: string
+ *              description: user ID
+ *            example: []
+ *          path:
+ *            type: string
+ *            description: page path
+ *            example: /
+ *          redirectTo:
+ *            type: string
+ *            description: redirect path
+ *            example: ""
+ *          revision:
+ *            $ref: '#/components/schemas/Revision'
+ *          status:
+ *            type: string
+ *            description: status
+ *            enum:
+ *              - 'wip'
+ *              - 'published'
+ *              - 'deleted'
+ *              - 'deprecated'
+ *            example: published
+ *          updatedAt:
+ *            type: string
+ *            description: date updated at
+ *            example: 2010-01-01T00:00:00.000Z
+ *
+ *      UpdatePost:
+ *        description: UpdatePost
+ *        type: object
+ *        properties:
+ *          _id:
+ *            type: string
+ *            description: update post ID
+ *            example: 5e0734e472560e001761fa68
+ *          __v:
+ *            type: number
+ *            description: DB record version
+ *            example: 0
+ *          pathPattern:
+ *            type: string
+ *            description: path pattern
+ *            example: /test
+ *          patternPrefix:
+ *            type: string
+ *            description: patternPrefix prefix
+ *            example: /
+ *          patternPrefix2:
+ *            type: string
+ *            description: path
+ *            example: test
+ *          channel:
+ *            type: string
+ *            description: channel
+ *            example: general
+ *          provider:
+ *            type: string
+ *            description: provider
+ *            enum:
+ *              - slack
+ *            example: slack
+ *          creator:
+ *            $ref: '#/components/schemas/User'
+ *          createdAt:
+ *            type: string
+ *            description: date created at
+ *            example: 2010-01-01T00:00:00.000Z
+ */
+
 /* eslint-disable no-use-before-define */
 module.exports = function(crowi, app) {
   const debug = require('debug')('growi:routes:page');
@@ -8,56 +136,30 @@ module.exports = function(crowi, app) {
 
   const Page = crowi.model('Page');
   const User = crowi.model('User');
-  const Bookmark = crowi.model('Bookmark');
   const PageTagRelation = crowi.model('PageTagRelation');
-  const UpdatePost = crowi.model('UpdatePost');
   const GlobalNotificationSetting = crowi.model('GlobalNotificationSetting');
+  const ShareLink = crowi.model('ShareLink');
 
   const ApiResponse = require('../util/apiResponse');
   const getToday = require('../util/getToday');
 
-  const { configManager, slackNotificationService } = crowi;
+  const { configManager, xssService } = crowi;
   const interceptorManager = crowi.getInterceptorManager();
   const globalNotificationService = crowi.getGlobalNotificationService();
+  const userNotificationService = crowi.getUserNotificationService();
+
+  const XssOption = require('../../lib/service/xss/xssOption');
+  const Xss = require('../../lib/service/xss/index');
+  const initializedConfig = {
+    isEnabledXssPrevention: configManager.getConfig('markdown', 'markdown:xss:isEnabledPrevention'),
+    tagWhiteList: xssService.getTagWhiteList(),
+    attrWhiteList: xssService.getAttrWhiteList(),
+  };
+  const xssOption = new XssOption(initializedConfig);
+  const xss = new Xss(xssOption);
+
 
   const actions = {};
-
-  const PORTAL_STATUS_NOT_EXISTS = 0;
-  const PORTAL_STATUS_EXISTS = 1;
-  const PORTAL_STATUS_FORBIDDEN = 2;
-
-  // register page events
-
-  const pageEvent = crowi.event('page');
-  pageEvent.on('create', (page, user, socketClientId) => {
-    page = serializeToObj(page); // eslint-disable-line no-param-reassign
-    crowi.getIo().sockets.emit('page:create', { page, user, socketClientId });
-  });
-  pageEvent.on('update', (page, user, socketClientId) => {
-    page = serializeToObj(page); // eslint-disable-line no-param-reassign
-    crowi.getIo().sockets.emit('page:update', { page, user, socketClientId });
-  });
-  pageEvent.on('delete', (page, user, socketClientId) => {
-    page = serializeToObj(page); // eslint-disable-line no-param-reassign
-    crowi.getIo().sockets.emit('page:delete', { page, user, socketClientId });
-  });
-
-
-  function serializeToObj(page) {
-    const returnObj = page.toObject();
-    if (page.revisionHackmdSynced != null && page.revisionHackmdSynced._id != null) {
-      returnObj.revisionHackmdSynced = page.revisionHackmdSynced._id;
-    }
-
-    if (page.lastUpdateUser != null && page.lastUpdateUser instanceof User) {
-      returnObj.lastUpdateUser = page.lastUpdateUser.toObject();
-    }
-    if (page.creator != null && page.creator instanceof User) {
-      returnObj.creator = page.creator.toObject();
-    }
-
-    return returnObj;
-  }
 
   function getPathFromRequest(req) {
     return pathUtils.normalizePath(req.params[0] || '');
@@ -72,9 +174,6 @@ module.exports = function(crowi, app) {
   }
 
   function generatePager(offset, limit, totalCount) {
-    let next = null;
-
-
     let prev = null;
 
     if (offset > 0) {
@@ -84,11 +183,9 @@ module.exports = function(crowi, app) {
       }
     }
 
-    if (totalCount < limit) {
+    let next = offset + limit;
+    if (totalCount < next) {
       next = null;
-    }
-    else {
-      next = offset + limit;
     }
 
     return {
@@ -98,65 +195,46 @@ module.exports = function(crowi, app) {
     };
   }
 
-  // user notification
-  // TODO create '/service/user-notification' module
-  /**
-   *
-   * @param {Page} page
-   * @param {User} user
-   * @param {string} slackChannelsStr comma separated string. e.g. 'general,channel1,channel2'
-   * @param {boolean} updateOrCreate
-   * @param {string} previousRevision
-   */
-  async function notifyToSlackByUser(page, user, slackChannelsStr, updateOrCreate, previousRevision) {
-    await page.updateSlackChannel(slackChannelsStr)
-      .catch((err) => {
-        logger.error('Error occured in updating slack channels: ', err);
-      });
-
-
-    if (slackNotificationService.hasSlackConfig()) {
-      const slackChannels = slackChannelsStr != null ? slackChannelsStr.split(',') : [null];
-
-      const promises = slackChannels.map((chan) => {
-        return crowi.slack.postPage(page, user, chan, updateOrCreate, previousRevision);
-      });
-
-      Promise.all(promises)
-        .catch((err) => {
-          logger.error('Error occured in sending slack notification: ', err);
-        });
-    }
-  }
-
-  function addRendarVarsForPage(renderVars, page) {
+  function addRenderVarsForPage(renderVars, page) {
     renderVars.page = page;
-    renderVars.path = page.path;
     renderVars.revision = page.revision;
-    renderVars.author = page.revision.author;
     renderVars.pageIdOnHackmd = page.pageIdOnHackmd;
     renderVars.revisionHackmdSynced = page.revisionHackmdSynced;
     renderVars.hasDraftOnHackmd = page.hasDraftOnHackmd;
-  }
 
-  async function addRenderVarsForUserPage(renderVars, page, requestUser) {
-    const userData = await User.findUserByUsername(User.getUsernameByPath(page.path))
-      .populate(User.IMAGE_POPULATION);
-
-    if (userData != null) {
-      renderVars.pageUser = userData;
-      renderVars.bookmarkList = await Bookmark.findByUser(userData, { limit: 10, populatePage: true, requestUser });
+    if (page.creator != null) {
+      renderVars.page.creator = renderVars.page.creator.toObject();
+    }
+    if (page.revision.author != null) {
+      renderVars.revision.author = renderVars.revision.author.toObject();
+    }
+    if (page.deleteUser != null) {
+      renderVars.page.deleteUser = renderVars.page.deleteUser.toObject();
     }
   }
 
-  function addRendarVarsForScope(renderVars, page) {
+  function addRenderVarsForPresentation(renderVars, page) {
+    // sanitize page.revision.body
+    if (crowi.configManager.getConfig('markdown', 'markdown:xss:isEnabledPrevention')) {
+      const preventXssRevision = xss.process(page.revision.body);
+      page.revision.body = preventXssRevision;
+    }
+    renderVars.page = page;
+    renderVars.revision = page.revision;
+  }
+
+  async function addRenderVarsForUserPage(renderVars, page) {
+    const userData = await User.findUserByUsername(User.getUsernameByPath(page.path));
+
+    if (userData != null) {
+      renderVars.pageUser = serializeUserSecurely(userData);
+    }
+  }
+
+  function addRenderVarsForScope(renderVars, page) {
     renderVars.grant = page.grant;
     renderVars.grantedGroupId = page.grantedGroup ? page.grantedGroup.id : null;
     renderVars.grantedGroupName = page.grantedGroup ? page.grantedGroup.name : null;
-  }
-
-  async function addRenderVarsForSlack(renderVars, page) {
-    renderVars.slack = await getSlackChannels(page);
   }
 
   async function addRenderVarsForDescendants(renderVars, path, requestUser, offset, limit, isRegExpEscapedFromPath) {
@@ -164,7 +242,7 @@ module.exports = function(crowi, app) {
 
     const queryOptions = {
       offset,
-      limit: limit + 1,
+      limit,
       includeTrashed: path.startsWith('/trash/'),
       isRegExpEscapedFromPath,
     };
@@ -177,7 +255,7 @@ module.exports = function(crowi, app) {
       seener_threshold: SEENER_THRESHOLD,
     };
     renderVars.pager = generatePager(result.offset, result.limit, result.totalCount);
-    renderVars.pages = pathUtils.encodePagesPath(result.pages);
+    renderVars.pages = result.pages;
   }
 
   function replacePlaceholdersOfTemplate(template, req) {
@@ -197,7 +275,7 @@ module.exports = function(crowi, app) {
 
   async function showPageForPresentation(req, res, next) {
     const path = getPathFromRequest(req);
-    const revisionId = req.query.revision;
+    const { revisionId } = req.query;
 
     let page = await Page.findByPathAndViewer(path, req.user);
 
@@ -209,35 +287,36 @@ module.exports = function(crowi, app) {
 
     // populate
     page = await page.populateDataToMakePresentation(revisionId);
-    addRendarVarsForPage(renderVars, page);
+
+    if (page != null) {
+      addRenderVarsForPresentation(renderVars, page);
+    }
+
     return res.render('page_presentation', renderVars);
   }
 
-  async function showPageListForCrowiBehavior(req, res, next) {
-    const portalPath = pathUtils.addTrailingSlash(getPathFromRequest(req));
+  async function showTopPage(req, res, next) {
+    const portalPath = req.path;
     const revisionId = req.query.revision;
 
-    // check whether this page has portal page
-    const portalPageStatus = await getPortalPageState(portalPath, req.user);
-
-    let view = 'customlayout-selector/page_list';
+    const view = 'layout-growi/page_list';
     const renderVars = { path: portalPath };
 
-    if (portalPageStatus === PORTAL_STATUS_FORBIDDEN) {
-      // inject to req
-      req.isForbidden = true;
-      view = 'customlayout-selector/forbidden';
-    }
-    else if (portalPageStatus === PORTAL_STATUS_EXISTS) {
-      let portalPage = await Page.findByPathAndViewer(portalPath, req.user);
-      portalPage.initLatestRevisionField(revisionId);
+    let portalPage = await Page.findByPathAndViewer(portalPath, req.user);
+    portalPage.initLatestRevisionField(revisionId);
 
-      // populate
-      portalPage = await portalPage.populateDataToShowRevision();
-
-      addRendarVarsForPage(renderVars, portalPage);
-      await addRenderVarsForSlack(renderVars, portalPage);
+    // add user to seen users
+    if (req.user != null) {
+      portalPage = await portalPage.seen(req.user);
     }
+
+    // populate
+    portalPage = await portalPage.populateDataToShowRevision();
+
+    addRenderVarsForPage(renderVars, portalPage);
+
+    const sharelinksNumber = await ShareLink.countDocuments({ relatedPage: portalPage._id });
+    renderVars.sharelinksNumber = sharelinksNumber;
 
     const limit = 50;
     const offset = parseInt(req.query.offset) || 0;
@@ -261,7 +340,7 @@ module.exports = function(crowi, app) {
     }
     if (page.redirectTo) {
       debug(`Redirect to '${page.redirectTo}'`);
-      return res.redirect(encodeURI(`${page.redirectTo}?redirectFrom=${pathUtils.encodePagePath(path)}`));
+      return res.redirect(`${encodeURI(page.redirectTo)}?redirectFrom=${encodeURIComponent(path)}`);
     }
 
     logger.debug('Page is found when processing pageShowForGrowiBehavior', page._id, page.path);
@@ -270,78 +349,45 @@ module.exports = function(crowi, app) {
     const offset = parseInt(req.query.offset) || 0;
     const renderVars = {};
 
-    let view = 'customlayout-selector/page';
+    let view = 'layout-growi/page';
 
     page.initLatestRevisionField(revisionId);
 
+    // add user to seen users
+    if (req.user != null) {
+      page = await page.seen(req.user);
+    }
+
     // populate
     page = await page.populateDataToShowRevision();
-    addRendarVarsForPage(renderVars, page);
-    addRendarVarsForScope(renderVars, page);
+    addRenderVarsForPage(renderVars, page);
+    addRenderVarsForScope(renderVars, page);
 
-    await addRenderVarsForSlack(renderVars, page);
     await addRenderVarsForDescendants(renderVars, path, req.user, offset, limit, true);
+
+    const sharelinksNumber = await ShareLink.countDocuments({ relatedPage: page._id });
+    renderVars.sharelinksNumber = sharelinksNumber;
 
     if (isUserPage(page.path)) {
       // change template
-      view = 'customlayout-selector/user_page';
-      await addRenderVarsForUserPage(renderVars, page, req.user);
+      view = 'layout-growi/user_page';
+      await addRenderVarsForUserPage(renderVars, page);
     }
 
     await interceptorManager.process('beforeRenderPage', req, res, renderVars);
     return res.render(view, renderVars);
   }
 
-  const getSlackChannels = async(page) => {
-    if (page.extended.slack) {
-      return page.extended.slack;
-    }
-
-    const data = await UpdatePost.findSettingsByPath(page.path);
-    const channels = data.map((e) => { return e.channel }).join(', ');
-    return channels;
-  };
-
-  /**
-   *
-   * @param {string} path
-   * @param {User} user
-   * @returns {number} PORTAL_STATUS_NOT_EXISTS(0) or PORTAL_STATUS_EXISTS(1) or PORTAL_STATUS_FORBIDDEN(2)
-   */
-  async function getPortalPageState(path, user) {
-    const portalPath = Page.addSlashOfEnd(path);
-    const page = await Page.findByPathAndViewer(portalPath, user);
-
-    if (page == null) {
-      // check the page is forbidden or just does not exist.
-      const isForbidden = await Page.count({ path: portalPath }) > 0;
-      return isForbidden ? PORTAL_STATUS_FORBIDDEN : PORTAL_STATUS_NOT_EXISTS;
-    }
-    return PORTAL_STATUS_EXISTS;
-  }
-
-
   actions.showTopPage = function(req, res) {
-    return showPageListForCrowiBehavior(req, res);
+    return showTopPage(req, res);
   };
 
   /**
-   * switch action by behaviorType
+   * Redirect to the page without trailing slash
    */
-  /* eslint-disable no-else-return */
   actions.showPageWithEndOfSlash = function(req, res, next) {
-    const behaviorType = configManager.getConfig('crowi', 'customize:behavior');
-
-    if (behaviorType === 'crowi') {
-      return showPageListForCrowiBehavior(req, res, next);
-    }
-    else {
-      const path = getPathFromRequest(req); // end of slash should be omitted
-      // redirect and showPage action will be triggered
-      return res.redirect(path);
-    }
+    return res.redirect(pathUtils.removeTrailingSlash(req.path));
   };
-  /* eslint-enable no-else-return */
 
   /**
    * switch action
@@ -353,22 +399,51 @@ module.exports = function(crowi, app) {
     if (req.query.presentation) {
       return showPageForPresentation(req, res, next);
     }
-
-    const behaviorType = configManager.getConfig('crowi', 'customize:behavior');
-
-    // check whether this page has portal page
-    if (behaviorType === 'crowi') {
-      const portalPagePath = pathUtils.addTrailingSlash(getPathFromRequest(req));
-      const hasPortalPage = await Page.count({ path: portalPagePath }) > 0;
-
-      if (hasPortalPage) {
-        logger.debug('The portal page is found', portalPagePath);
-        return res.redirect(encodeURI(`${portalPagePath}?redirectFrom=${pathUtils.encodePagePath(req.path)}`));
-      }
-    }
-
     // delegate to showPageForGrowiBehavior
     return showPageForGrowiBehavior(req, res, next);
+  };
+
+  actions.showSharedPage = async function(req, res, next) {
+    const { linkId } = req.params;
+    const revisionId = req.query.revision;
+
+    const shareLink = await ShareLink.findOne({ _id: linkId }).populate('relatedPage');
+
+    if (shareLink == null || shareLink.relatedPage == null) {
+      // page or sharelink are not found
+      return res.render('layout-growi/not_found_shared_page');
+    }
+
+    const renderVars = {};
+
+    renderVars.sharelink = shareLink;
+
+    // check if share link is expired
+    if (shareLink.isExpired()) {
+      // page is not found
+      return res.render('layout-growi/expired_shared_page', renderVars);
+    }
+
+    let page = shareLink.relatedPage;
+
+    // presentation mode
+    if (req.query.presentation) {
+      page = await page.populateDataToMakePresentation(revisionId);
+
+      // populate
+      addRenderVarsForPage(renderVars, page);
+      return res.render('page_presentation', renderVars);
+    }
+
+    page.initLatestRevisionField(revisionId);
+
+    // populate
+    page = await page.populateDataToShowRevision();
+    addRenderVarsForPage(renderVars, page);
+    addRenderVarsForScope(renderVars, page);
+
+    await interceptorManager.process('beforeRenderPage', req, res, renderVars);
+    return res.render('layout-growi/shared_page', renderVars);
   };
 
   /**
@@ -376,16 +451,8 @@ module.exports = function(crowi, app) {
    */
   /* eslint-disable no-else-return */
   actions.trashPageListShowWrapper = function(req, res) {
-    const behaviorType = configManager.getConfig('crowi', 'customize:behavior');
-
-    if (behaviorType === 'crowi') {
-      // Crowi behavior for '/trash/*'
-      return actions.deletedPageListShow(req, res);
-    }
-    else {
-      // redirect to '/trash'
-      return res.redirect('/trash');
-    }
+    // redirect to '/trash'
+    return res.redirect('/trash');
   };
   /* eslint-enable no-else-return */
 
@@ -394,16 +461,8 @@ module.exports = function(crowi, app) {
    */
   /* eslint-disable no-else-return */
   actions.trashPageShowWrapper = function(req, res) {
-    const behaviorType = configManager.getConfig('crowi', 'customize:behavior');
-
-    if (behaviorType === 'crowi') {
-      // redirect to '/trash/'
-      return res.redirect('/trash/');
-    }
-    else {
-      // Crowi behavior for '/trash/*'
-      return actions.deletedPageListShow(req, res);
-    }
+    // Crowi behavior for '/trash/*'
+    return actions.deletedPageListShow(req, res);
   };
   /* eslint-enable no-else-return */
 
@@ -412,35 +471,25 @@ module.exports = function(crowi, app) {
    */
   /* eslint-disable no-else-return */
   actions.deletedPageListShowWrapper = function(req, res) {
-    const behaviorType = configManager.getConfig('crowi', 'customize:behavior');
-
-    if (behaviorType === 'crowi') {
-      // Crowi behavior for '/trash/*'
-      return actions.deletedPageListShow(req, res);
-    }
-    else {
-      const path = `/trash${getPathFromRequest(req)}`;
-      return res.redirect(path);
-    }
+    const path = `/trash${getPathFromRequest(req)}`;
+    return res.redirect(path);
   };
   /* eslint-enable no-else-return */
 
   actions.notFound = async function(req, res) {
     const path = getPathFromRequest(req);
 
-    const isCreatable = Page.isCreatableName(path);
-
     let view;
     const renderVars = { path };
 
-    if (!isCreatable) {
-      view = 'customlayout-selector/not_creatable';
+    if (!isCreatablePage(path)) {
+      view = 'layout-growi/not_creatable';
     }
     else if (req.isForbidden) {
-      view = 'customlayout-selector/forbidden';
+      view = 'layout-growi/forbidden';
     }
     else {
-      view = 'customlayout-selector/not_found';
+      view = 'layout-growi/not_found';
 
       // retrieve templates
       if (req.user != null) {
@@ -457,7 +506,7 @@ module.exports = function(crowi, app) {
       const ancestor = await Page.findAncestorByPathAndViewer(path, req.user);
       if (ancestor != null) {
         await ancestor.populate('grantedGroup').execPopulate();
-        addRendarVarsForScope(renderVars, ancestor);
+        addRenderVarsForScope(renderVars, ancestor);
       }
     }
 
@@ -469,13 +518,15 @@ module.exports = function(crowi, app) {
   };
 
   actions.deletedPageListShow = async function(req, res) {
-    const path = `/trash${getPathFromRequest(req)}`;
+    // normalizePath makes '/trash/' -> '/trash'
+    const path = pathUtils.normalizePath(`/trash${getPathFromRequest(req)}`);
+
     const limit = 50;
     const offset = parseInt(req.query.offset) || 0;
 
     const queryOptions = {
       offset,
-      limit: limit + 1,
+      limit,
       includeTrashed: true,
     };
 
@@ -492,8 +543,8 @@ module.exports = function(crowi, app) {
     }
 
     renderVars.pager = generatePager(result.offset, result.limit, result.totalCount);
-    renderVars.pages = pathUtils.encodePagesPath(result.pages);
-    res.render('customlayout-selector/page_list', renderVars);
+    renderVars.pages = result.pages;
+    res.render('layout-growi/page_list', renderVars);
   };
 
   /**
@@ -505,7 +556,7 @@ module.exports = function(crowi, app) {
     const page = await Page.findByIdAndViewer(id, req.user);
 
     if (page != null) {
-      return res.redirect(pathUtils.encodePagePath(page.path));
+      return res.redirect(encodeURI(page.path));
     }
 
     return res.redirect('/');
@@ -515,6 +566,51 @@ module.exports = function(crowi, app) {
   const api = {};
   actions.api = api;
 
+  /**
+   * @swagger
+   *
+   *    /pages.list:
+   *      get:
+   *        tags: [Pages, CrowiCompatibles]
+   *        operationId: listPages
+   *        summary: /pages.list
+   *        description: Get list of pages
+   *        parameters:
+   *          - in: query
+   *            name: path
+   *            schema:
+   *              $ref: '#/components/schemas/Page/properties/path'
+   *          - in: query
+   *            name: user
+   *            schema:
+   *              $ref: '#/components/schemas/User/properties/username'
+   *          - in: query
+   *            name: limit
+   *            schema:
+   *              $ref: '#/components/schemas/V1PaginateResult/properties/meta/properties/limit'
+   *          - in: query
+   *            name: offset
+   *            schema:
+   *              $ref: '#/components/schemas/V1PaginateResult/properties/meta/properties/offset'
+   *        responses:
+   *          200:
+   *            description: Succeeded to get list of pages.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *                    pages:
+   *                      type: array
+   *                      items:
+   *                        $ref: '#/components/schemas/Page'
+   *                      description: page list
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
+   */
   /**
    * @api {get} /pages.list List pages by user
    * @apiName ListPage
@@ -556,7 +652,12 @@ module.exports = function(crowi, app) {
         result.pages.pop();
       }
 
-      result.pages = pathUtils.encodePagesPath(result.pages);
+      result.pages.forEach((page) => {
+        if (page.lastUpdateUser != null && page.lastUpdateUser instanceof User) {
+          page.lastUpdateUser = serializeUserSecurely(page.lastUpdateUser);
+        }
+      });
+
       return res.json(ApiResponse.success(result));
     }
     catch (err) {
@@ -564,19 +665,10 @@ module.exports = function(crowi, app) {
     }
   };
 
-  /**
-   * @api {post} /pages.create Create new page
-   * @apiName CreatePage
-   * @apiGroup Page
-   *
-   * @apiParam {String} body
-   * @apiParam {String} path
-   * @apiParam {String} grant
-   * @apiParam {Array} pageTags
-   */
+  // TODO If everything that depends on this route, delete it too
   api.create = async function(req, res) {
     const body = req.body.body || null;
-    const pagePath = req.body.path || null;
+    let pagePath = req.body.path || null;
     const grant = req.body.grant || null;
     const grantUserGroupId = req.body.grantUserGroupId || null;
     const overwriteScopesOfDescendants = req.body.overwriteScopesOfDescendants || null;
@@ -588,6 +680,9 @@ module.exports = function(crowi, app) {
     if (body === null || pagePath === null) {
       return res.json(ApiResponse.error('Parameters body and path are required.'));
     }
+
+    // check whether path starts slash
+    pagePath = pathUtils.addHeadingSlash(pagePath);
 
     // check page existence
     const isExist = await Page.count({ path: pagePath }) > 0;
@@ -609,7 +704,11 @@ module.exports = function(crowi, app) {
       savedTags = await PageTagRelation.listTagNamesByPage(createdPage.id);
     }
 
-    const result = { page: serializeToObj(createdPage), tags: savedTags };
+    const result = {
+      page: serializePageSecurely(createdPage),
+      revision: serializeRevisionSecurely(createdPage.revision),
+      tags: savedTags,
+    };
     res.json(ApiResponse.success(result));
 
     // update scopes for descendants
@@ -619,18 +718,72 @@ module.exports = function(crowi, app) {
 
     // global notification
     try {
-      await globalNotificationService.fire(GlobalNotificationSetting.EVENT.PAGE_CREATE, createdPage.path, req.user);
+      await globalNotificationService.fire(GlobalNotificationSetting.EVENT.PAGE_CREATE, createdPage, req.user);
     }
     catch (err) {
-      logger.error(err);
+      logger.error('Create notification failed', err);
     }
 
     // user notification
     if (isSlackEnabled) {
-      await notifyToSlackByUser(createdPage, req.user, slackChannels, 'create', false);
+      try {
+        const results = await userNotificationService.fire(createdPage, req.user, slackChannels, 'create');
+        results.forEach((result) => {
+          if (result.status === 'rejected') {
+            logger.error('Create user notification failed', result.reason);
+          }
+        });
+      }
+      catch (err) {
+        logger.error('Create user notification failed', err);
+      }
     }
   };
 
+  /**
+   * @swagger
+   *
+   *    /pages.update:
+   *      post:
+   *        tags: [Pages, CrowiCompatibles]
+   *        operationId: updatePage
+   *        summary: /pages.update
+   *        description: Update page
+   *        requestBody:
+   *          content:
+   *            application/json:
+   *              schema:
+   *                properties:
+   *                  body:
+   *                    $ref: '#/components/schemas/Revision/properties/body'
+   *                  page_id:
+   *                    $ref: '#/components/schemas/Page/properties/_id'
+   *                  revision_id:
+   *                    $ref: '#/components/schemas/Revision/properties/_id'
+   *                  grant:
+   *                    $ref: '#/components/schemas/Page/properties/grant'
+   *                required:
+   *                  - body
+   *                  - page_id
+   *                  - revision_id
+   *        responses:
+   *          200:
+   *            description: Succeeded to update page.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *                    page:
+   *                      $ref: '#/components/schemas/Page'
+   *                    revision:
+   *                      $ref: '#/components/schemas/Revision'
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
+   */
   /**
    * @api {post} /pages.update Update page
    * @apiName UpdatePage
@@ -658,8 +811,8 @@ module.exports = function(crowi, app) {
     const socketClientId = req.body.socketClientId || undefined;
     const pageTags = req.body.pageTags || undefined;
 
-    if (pageId === null || pageBody === null) {
-      return res.json(ApiResponse.error('page_id and body are required.'));
+    if (pageId === null || pageBody === null || revisionId === null) {
+      return res.json(ApiResponse.error('page_id, body and revision_id are required.'));
     }
 
     // check page existence
@@ -696,7 +849,11 @@ module.exports = function(crowi, app) {
       savedTags = await PageTagRelation.listTagNamesByPage(pageId);
     }
 
-    const result = { page: serializeToObj(page), tags: savedTags };
+    const result = {
+      page: serializePageSecurely(page),
+      revision: serializeRevisionSecurely(page.revision),
+      tags: savedTags,
+    };
     res.json(ApiResponse.success(result));
 
     // update scopes for descendants
@@ -706,18 +863,66 @@ module.exports = function(crowi, app) {
 
     // global notification
     try {
-      await globalNotificationService.fire(GlobalNotificationSetting.EVENT.PAGE_EDIT, page.path, req.user);
+      await globalNotificationService.fire(GlobalNotificationSetting.EVENT.PAGE_EDIT, page, req.user);
     }
     catch (err) {
-      logger.error(err);
+      logger.error('Edit notification failed', err);
     }
 
     // user notification
     if (isSlackEnabled) {
-      await notifyToSlackByUser(page, req.user, slackChannels, 'update', previousRevision);
+      try {
+        const results = await userNotificationService.fire(page, req.user, slackChannels, 'update', { previousRevision });
+        results.forEach((result) => {
+          if (result.status === 'rejected') {
+            logger.error('Create user notification failed', result.reason);
+          }
+        });
+      }
+      catch (err) {
+        logger.error('Create user notification failed', err);
+      }
     }
   };
 
+  /**
+   * @swagger
+   *
+   *    /pages.get:
+   *      get:
+   *        tags: [Pages, CrowiCompatibles]
+   *        operationId: getPage
+   *        summary: /pages.get
+   *        description: Get page data
+   *        parameters:
+   *          - in: query
+   *            name: page_id
+   *            schema:
+   *              $ref: '#/components/schemas/Page/properties/_id'
+   *          - in: query
+   *            name: path
+   *            schema:
+   *              $ref: '#/components/schemas/Page/properties/path'
+   *          - in: query
+   *            name: revision_id
+   *            schema:
+   *              $ref: '#/components/schemas/Revision/properties/_id'
+   *        responses:
+   *          200:
+   *            description: Succeeded to get page data.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *                    page:
+   *                      $ref: '#/components/schemas/Page'
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
+   */
   /**
    * @api {get} /pages.get Get page data
    * @apiName GetPage
@@ -758,11 +963,45 @@ module.exports = function(crowi, app) {
     }
 
     const result = {};
-    result.page = page; // TODO consider to use serializeToObj method -- 2018.08.06 Yuki Takei
+    result.page = page; // TODO consider to use serializePageSecurely method -- 2018.08.06 Yuki Takei
 
     return res.json(ApiResponse.success(result));
   };
 
+  /**
+   * @swagger
+   *
+   *    /pages.exist:
+   *      get:
+   *        tags: [Pages]
+   *        operationId: getPageExistence
+   *        summary: /pages.exist
+   *        description: Get page existence
+   *        parameters:
+   *          - in: query
+   *            name: pagePaths
+   *            schema:
+   *              type: string
+   *              description: Page path list in JSON Array format
+   *              example: '["/", "/user/unknown"]'
+   *        responses:
+   *          200:
+   *            description: Succeeded to get page existence.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *                    pages:
+   *                      type: string
+   *                      description: Properties of page path and existence
+   *                      example: '{"/": true, "/user/unknown": false}'
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
+   */
   /**
    * @api {get} /pages.exist Get if page exists
    * @apiName GetPage
@@ -771,21 +1010,51 @@ module.exports = function(crowi, app) {
    * @apiParam {String} pages (stringified JSON)
    */
   api.exist = async function(req, res) {
-    const pagesAsObj = JSON.parse(req.query.pages || '{}');
-    const pagePaths = Object.keys(pagesAsObj);
+    const pagePaths = JSON.parse(req.query.pagePaths || '[]');
 
+    const pages = {};
     await Promise.all(pagePaths.map(async(path) => {
       // check page existence
       const isExist = await Page.count({ path }) > 0;
-      pagesAsObj[path] = isExist;
+      pages[path] = isExist;
       return;
     }));
 
-    const result = { pages: pagesAsObj };
+    const result = { pages };
 
     return res.json(ApiResponse.success(result));
   };
 
+  /**
+   * @swagger
+   *
+   *    /pages.getPageTag:
+   *      get:
+   *        tags: [Pages]
+   *        operationId: getPageTag
+   *        summary: /pages.getPageTag
+   *        description: Get page tag
+   *        parameters:
+   *          - in: query
+   *            name: pageId
+   *            schema:
+   *              $ref: '#/components/schemas/Page/properties/_id'
+   *        responses:
+   *          200:
+   *            description: Succeeded to get page tags.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *                    tags:
+   *                      $ref: '#/components/schemas/Tags'
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
+   */
   /**
    * @api {get} /pages.getPageTag get page tags
    * @apiName GetPageTag
@@ -805,116 +1074,35 @@ module.exports = function(crowi, app) {
   };
 
   /**
-   * @api {post} /pages.seen Mark as seen user
-   * @apiName SeenPage
-   * @apiGroup Page
+   * @swagger
    *
-   * @apiParam {String} page_id Page Id.
+   *    /pages.updatePost:
+   *      get:
+   *        tags: [Pages, CrowiCompatibles]
+   *        operationId: getUpdatePostPage
+   *        summary: /pages.updatePost
+   *        description: Get UpdatePost setting list
+   *        parameters:
+   *          - in: query
+   *            name: path
+   *            schema:
+   *              $ref: '#/components/schemas/Page/properties/path'
+   *        responses:
+   *          200:
+   *            description: Succeeded to get UpdatePost setting list.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *                    updatePost:
+   *                      $ref: '#/components/schemas/UpdatePost'
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
    */
-  api.seen = async function(req, res) {
-    const user = req.user;
-    const pageId = req.body.page_id;
-    if (!pageId) {
-      return res.json(ApiResponse.error('page_id required'));
-    }
-    if (!req.user) {
-      return res.json(ApiResponse.error('user required'));
-    }
-
-    let page;
-    try {
-      page = await Page.findByIdAndViewer(pageId, user);
-      if (user != null) {
-        page = await page.seen(user);
-      }
-    }
-    catch (err) {
-      debug('Seen user update error', err);
-      return res.json(ApiResponse.error(err));
-    }
-
-    const result = {};
-    result.seenUser = page.seenUsers;
-
-    return res.json(ApiResponse.success(result));
-  };
-
-  /**
-   * @api {post} /likes.add Like page
-   * @apiName LikePage
-   * @apiGroup Page
-   *
-   * @apiParam {String} page_id Page Id.
-   */
-  api.like = async function(req, res) {
-    const pageId = req.body.page_id;
-    if (!pageId) {
-      return res.json(ApiResponse.error('page_id required'));
-    }
-    if (!req.user) {
-      return res.json(ApiResponse.error('user required'));
-    }
-
-    let page;
-    try {
-      page = await Page.findByIdAndViewer(pageId, req.user);
-      if (page == null) {
-        throw new Error(`Page '${pageId}' is not found or forbidden`);
-      }
-      page = await page.like(req.user);
-    }
-    catch (err) {
-      debug('Seen user update error', err);
-      return res.json(ApiResponse.error(err));
-    }
-
-    const result = { page };
-    result.seenUser = page.seenUsers;
-    res.json(ApiResponse.success(result));
-
-    try {
-      // global notification
-      await globalNotificationService.fire(GlobalNotificationSetting.EVENT.PAGE_LIKE, page.path, req.user);
-    }
-    catch (err) {
-      logger.error('Like failed', err);
-    }
-  };
-
-  /**
-   * @api {post} /likes.remove Unlike page
-   * @apiName UnlikePage
-   * @apiGroup Page
-   *
-   * @apiParam {String} page_id Page Id.
-   */
-  api.unlike = async function(req, res) {
-    const pageId = req.body.page_id;
-    if (!pageId) {
-      return res.json(ApiResponse.error('page_id required'));
-    }
-    if (req.user == null) {
-      return res.json(ApiResponse.error('user required'));
-    }
-
-    let page;
-    try {
-      page = await Page.findByIdAndViewer(pageId, req.user);
-      if (page == null) {
-        throw new Error(`Page '${pageId}' is not found or forbidden`);
-      }
-      page = await page.unlike(req.user);
-    }
-    catch (err) {
-      debug('Seen user update error', err);
-      return res.json(ApiResponse.error(err));
-    }
-
-    const result = { page };
-    result.seenUser = page.seenUsers;
-    return res.json(ApiResponse.success(result));
-  };
-
   /**
    * @api {get} /pages.updatePost
    * @apiName Get UpdatePost setting list
@@ -966,7 +1154,7 @@ module.exports = function(crowi, app) {
 
     const options = { socketClientId };
 
-    let page = await Page.findByIdAndViewer(pageId, req.user);
+    const page = await Page.findByIdAndViewer(pageId, req.user);
 
     if (page == null) {
       return res.json(ApiResponse.error(`Page '${pageId}' is not found or forbidden`, 'notfound_or_forbidden'));
@@ -979,39 +1167,34 @@ module.exports = function(crowi, app) {
         if (!req.user.canDeleteCompletely(page.creator)) {
           return res.json(ApiResponse.error('You can not delete completely', 'user_not_admin'));
         }
-        if (isRecursively) {
-          page = await Page.completelyDeletePageRecursively(page, req.user, options);
-        }
-        else {
-          page = await Page.completelyDeletePage(page, req.user, options);
-        }
+        await crowi.pageService.deleteCompletely(page, req.user, options, isRecursively);
       }
       else {
         if (!page.isUpdatable(previousRevision)) {
           return res.json(ApiResponse.error('Someone could update this page, so couldn\'t delete.', 'outdated'));
         }
 
-        if (isRecursively) {
-          page = await Page.deletePageRecursively(page, req.user, options);
-        }
-        else {
-          page = await Page.deletePage(page, req.user, options);
-        }
+        await crowi.pageService.deletePage(page, req.user, options, isRecursively);
       }
     }
     catch (err) {
       logger.error('Error occured while get setting', err);
-      return res.json(ApiResponse.error('Failed to delete page.', 'unknown'));
+      return res.json(ApiResponse.error('Failed to delete page.', err.message));
     }
 
     debug('Page deleted', page.path);
     const result = {};
-    result.page = page; // TODO consider to use serializeToObj method -- 2018.08.06 Yuki Takei
+    result.page = page; // TODO consider to use serializePageSecurely method -- 2018.08.06 Yuki Takei
 
     res.json(ApiResponse.success(result));
 
-    // global notification
-    await globalNotificationService.fire(GlobalNotificationSetting.EVENT.PAGE_DELETE, page.path, req.user);
+    try {
+      // global notification
+      await globalNotificationService.fire(GlobalNotificationSetting.EVENT.PAGE_DELETE, page, req.user);
+    }
+    catch (err) {
+      logger.error('Delete notification failed', err);
+    }
   };
 
   /**
@@ -1026,7 +1209,7 @@ module.exports = function(crowi, app) {
     const socketClientId = req.body.socketClientId || undefined;
 
     // get recursively flag
-    const isRecursively = (req.body.recursively !== undefined);
+    const isRecursively = (req.body.recursively != null);
 
     let page;
     try {
@@ -1034,13 +1217,7 @@ module.exports = function(crowi, app) {
       if (page == null) {
         throw new Error(`Page '${pageId}' is not found or forbidden`, 'notfound_or_forbidden');
       }
-
-      if (isRecursively) {
-        page = await Page.revertDeletedPageRecursively(page, req.user, { socketClientId });
-      }
-      else {
-        page = await Page.revertDeletedPage(page, req.user, { socketClientId });
-      }
+      page = await crowi.pageService.revertDeletedPage(page, req.user, { socketClientId }, isRecursively);
     }
     catch (err) {
       logger.error('Error occured while get setting', err);
@@ -1048,81 +1225,49 @@ module.exports = function(crowi, app) {
     }
 
     const result = {};
-    result.page = page; // TODO consider to use serializeToObj method -- 2018.08.06 Yuki Takei
+    result.page = page; // TODO consider to use serializePageSecurely method -- 2018.08.06 Yuki Takei
 
     return res.json(ApiResponse.success(result));
   };
 
   /**
-   * @api {post} /pages.rename Rename page
-   * @apiName RenamePage
-   * @apiGroup Page
+   * @swagger
    *
-   * @apiParam {String} page_id Page Id.
-   * @apiParam {String} path
-   * @apiParam {String} revision_id
-   * @apiParam {String} new_path New path name.
-   * @apiParam {Bool} create_redirect
+   *    /pages.duplicate:
+   *      post:
+   *        tags: [Pages]
+   *        operationId: duplicatePage
+   *        summary: /pages.duplicate
+   *        description: Duplicate page
+   *        requestBody:
+   *          content:
+   *            application/json:
+   *              schema:
+   *                properties:
+   *                  page_id:
+   *                    $ref: '#/components/schemas/Page/properties/_id'
+   *                  new_path:
+   *                    $ref: '#/components/schemas/Page/properties/path'
+   *                required:
+   *                  - page_id
+   *        responses:
+   *          200:
+   *            description: Succeeded to duplicate page.
+   *            content:
+   *              application/json:
+   *                schema:
+   *                  properties:
+   *                    ok:
+   *                      $ref: '#/components/schemas/V1Response/properties/ok'
+   *                    page:
+   *                      $ref: '#/components/schemas/Page'
+   *                    tags:
+   *                      $ref: '#/components/schemas/Tags'
+   *          403:
+   *            $ref: '#/components/responses/403'
+   *          500:
+   *            $ref: '#/components/responses/500'
    */
-  api.rename = async function(req, res) {
-    const pageId = req.body.page_id;
-    const previousRevision = req.body.revision_id || null;
-    const newPagePath = pathUtils.normalizePath(req.body.new_path);
-    const options = {
-      createRedirectPage: (req.body.create_redirect != null),
-      updateMetadata: (req.body.remain_metadata == null),
-      socketClientId: +req.body.socketClientId || undefined,
-    };
-    const isRecursively = (req.body.recursively != null);
-
-    if (!Page.isCreatableName(newPagePath)) {
-      return res.json(ApiResponse.error(`Could not use the path '${newPagePath})'`, 'invalid_path'));
-    }
-
-    const isExist = await Page.count({ path: newPagePath }) > 0;
-    if (isExist) {
-      // if page found, cannot cannot rename to that path
-      return res.json(ApiResponse.error(`'new_path=${newPagePath}' already exists`, 'already_exists'));
-    }
-
-    let page;
-
-    try {
-      page = await Page.findByIdAndViewer(pageId, req.user);
-
-      if (page == null) {
-        return res.json(ApiResponse.error(`Page '${pageId}' is not found or forbidden`, 'notfound_or_forbidden'));
-      }
-
-      if (!page.isUpdatable(previousRevision)) {
-        return res.json(ApiResponse.error('Someone could update this page, so couldn\'t delete.', 'outdated'));
-      }
-
-      if (isRecursively) {
-        page = await Page.renameRecursively(page, newPagePath, req.user, options);
-      }
-      else {
-        page = await Page.rename(page, newPagePath, req.user, options);
-      }
-    }
-    catch (err) {
-      logger.error(err);
-      return res.json(ApiResponse.error('Failed to update page.', 'unknown'));
-    }
-
-    const result = {};
-    result.page = page; // TODO consider to use serializeToObj method -- 2018.08.06 Yuki Takei
-
-    res.json(ApiResponse.success(result));
-
-    // global notification
-    globalNotificationService.fire(GlobalNotificationSetting.EVENT.PAGE_MOVE, page.path, req.user, {
-      oldPath: req.body.path,
-    });
-
-    return page;
-  };
-
   /**
    * @api {post} /pages.duplicate Duplicate page
    * @apiName DuplicatePage
@@ -1133,13 +1278,16 @@ module.exports = function(crowi, app) {
    */
   api.duplicate = async function(req, res) {
     const pageId = req.body.page_id;
-    const newPagePath = pathUtils.normalizePath(req.body.new_path);
+    let newPagePath = pathUtils.normalizePath(req.body.new_path);
 
     const page = await Page.findByIdAndViewer(pageId, req.user);
 
     if (page == null) {
       return res.json(ApiResponse.error(`Page '${pageId}' is not found or forbidden`, 'notfound_or_forbidden'));
     }
+
+    // check whether path starts slash
+    newPagePath = pathUtils.addHeadingSlash(newPagePath);
 
     await page.populateDataToShowRevision();
     const originTags = await page.findRelatedTagsById();
@@ -1176,36 +1324,6 @@ module.exports = function(crowi, app) {
 
     const result = { path };
     return res.json(ApiResponse.success(result));
-  };
-
-  api.recentCreated = async function(req, res) {
-    const pageId = req.query.page_id;
-
-    if (pageId == null) {
-      return res.json(ApiResponse.error('param \'pageId\' must not be null'));
-    }
-
-    const page = await Page.findById(pageId);
-    if (page == null) {
-      return res.json(ApiResponse.error(`Page (id='${pageId}') does not exist`));
-    }
-    if (!isUserPage(page.path)) {
-      return res.json(ApiResponse.error(`Page (id='${pageId}') is not a user home`));
-    }
-
-    const limit = +req.query.limit || 50;
-    const offset = +req.query.offset || 0;
-    const queryOptions = { offset, limit };
-
-    try {
-      const result = await Page.findListByCreator(page.creator, req.user, queryOptions);
-      result.pages = pathUtils.encodePagesPath(result.pages);
-
-      return res.json(ApiResponse.success(result));
-    }
-    catch (err) {
-      return res.json(ApiResponse.error(err));
-    }
   };
 
   return actions;

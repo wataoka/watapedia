@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - release/**
+
+jobs:
+  github-release:
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      RELEASE_VERSION: ${{ steps.bump-version.outputs.RELEASE_VERSION }}
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Init Git
+      run: |
+        git config --local user.name "GitHub Action"
+        git config --local user.email "info@weseek.co.jp"
+        git remote set-url origin "https://$GITHUB_ACTOR:${{ secrets.GITHUB_TOKEN }}@github.com/$GITHUB_REPOSITORY"
+
+    - name: Bump version
+      id: bump-version
+      run: |
+        npm --no-git-tag-version version patch
+        export RELEASE_VERSION=`npm run version --silent`
+        sh ./bin/github-actions/update-readme.sh
+        echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+        echo ::set-output name=RELEASE_VERSION::$RELEASE_VERSION
+
+    - name: Checkout, Commit, Tag and Push
+      run: |
+        TMP_RELEASE_BRANCH=tmp/release-${{ env.RELEASE_VERSION }}
+        git checkout -B $TMP_RELEASE_BRANCH
+        git commit -am "Release v${{ env.RELEASE_VERSION }}"
+        git tag -a v${{ env.RELEASE_VERSION }} -m "v${{ env.RELEASE_VERSION }}"
+        git push --follow-tags origin $TMP_RELEASE_BRANCH
+        git push --delete origin $TMP_RELEASE_BRANCH
+
+    - name: Upload release notes
+      uses: Roang-zero1/github-create-release-action@master
+      with:
+        created_tag: v${{ env.RELEASE_VERSION }}
+        changelog_file: CHANGES.md
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+  build-image:
+    needs: github-release
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        flavor: [default, nocdn]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Checkout released tag
+      run: |
+        git fetch --tags
+        git checkout refs/tags/v${{ needs.github-release.outputs.RELEASE_VERSION }}
+
+    - name: Determine suffix
+      run: |
+        [[ ${{ matrix.flavor }} = "nocdn" ]] && suffix="-nocdn" || suffix=""
+        echo "SUFFIX=$suffix" >> $GITHUB_ENV
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Login to docker.io registry
+      run: |
+        echo ${{ secrets. DOCKER_REGISTRY_PASSWORD }} | docker login --username wsmoogle --password-stdin
+
+    - name: Build Docker Image
+      run: |
+        docker buildx build \
+          --tag growi${{ env.SUFFIX }} \
+          --build-arg flavor=${{ matrix.flavor }} \
+          --platform linux/amd64 \
+          --load \
+          --file ./docker/Dockerfile .
+
+    - name: Docker Tags by SemVer
+      uses: weseek/ghaction-docker-tags-by-semver@v1.0.5
+      with:
+        source: growi${{ env.SUFFIX }}
+        target: weseek/growi
+        semver: ${{ needs.github-release.outputs.RELEASE_VERSION }}
+        suffix: ${{ env.SUFFIX }}
+        additional-tags: 'latest'
+        publish: true
+
+    - name: Update Docker Hub Description
+      uses: peter-evans/dockerhub-description@v2
+      with:
+        username: wsmoogle
+        password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+        repository: weseek/growi
+        readme-filepath: ./docker/README.md
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: wsmoogle
+        password: ${{ secrets.DOCKER_REGISTRY_ON_GITHUB_PASSWORD }}
+
+    - name: Docker Tags by SemVer in Github Container Registry
+      uses: weseek/ghaction-docker-tags-by-semver@v1.0.3
+      with:
+        source: growi${{ env.SUFFIX }}
+        target: ghcr.io/weseek/growi
+        semver: ${{ needs.github-release.outputs.RELEASE_VERSION }}
+        suffix: ${{ env.SUFFIX }}
+        additional-tags: 'latest'
+        publish: true
+
+    - name: Slack Notification
+      uses: weseek/ghaction-release-slack-notification@master
+      with:
+        channel: '#release'
+        url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        created_tag: 'v${{ needs.github-release.outputs.RELEASE_VERSION }}${{ env.SUFFIX }}'
+
+    - name: Check whether workspace is clean
+      run: |
+        STATUS=`git status --porcelain`
+        if [ -z "$STATUS" ]; then exit 0; else exit 1; fi
+

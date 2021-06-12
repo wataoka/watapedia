@@ -4,10 +4,11 @@ const fs = require('fs');
 const path = require('path');
 const mkdir = require('mkdirp');
 const streamToPromise = require('stream-to-promise');
+const urljoin = require('url-join');
 
 module.exports = function(crowi) {
   const Uploader = require('./uploader');
-  const lib = new Uploader(crowi.configManager);
+  const lib = new Uploader(crowi);
   const basePath = path.posix.join(crowi.publicDir, 'uploads');
 
   function getFilePathOnStorage(attachment) {
@@ -25,12 +26,31 @@ module.exports = function(crowi) {
     return filePath;
   }
 
+  lib.isValidUploadSettings = function() {
+    return true;
+  };
+
   lib.deleteFile = async function(attachment) {
     const filePath = getFilePathOnStorage(attachment);
     return lib.deleteFileByFilePath(filePath);
   };
 
+  lib.deleteFiles = async function(attachments) {
+    attachments.map((attachment) => {
+      return this.deleteFile(attachment);
+    });
+  };
+
   lib.deleteFileByFilePath = async function(filePath) {
+    // check file exists
+    try {
+      fs.statSync(filePath);
+    }
+    catch (err) {
+      logger.warn(`Any AttachmentFile which path is '${filePath}' does not exist in local fs`);
+      return;
+    }
+
     return fs.unlinkSync(filePath);
   };
 
@@ -76,7 +96,32 @@ module.exports = function(crowi) {
    */
   lib.checkLimit = async(uploadFileSize) => {
     const maxFileSize = crowi.configManager.getConfig('crowi', 'app:maxFileSize');
-    return { isUploadable: uploadFileSize <= maxFileSize, errorMessage: 'File size exceeds the size limit per file' };
+    const totalLimit = crowi.configManager.getConfig('crowi', 'app:fileUploadTotalLimit');
+    return lib.doCheckLimit(uploadFileSize, maxFileSize, totalLimit);
+  };
+
+  /**
+   * Checks if Uploader can respond to the HTTP request.
+   */
+  lib.canRespond = () => {
+    // Check whether to use internal redirect of nginx or Apache.
+    return lib.configManager.getConfig('crowi', 'fileUpload:local:useInternalRedirect');
+  };
+
+  /**
+   * Respond to the HTTP request.
+   * @param {Response} res
+   * @param {Response} attachment
+   */
+  lib.respond = (res, attachment) => {
+    // Responce using internal redirect of nginx or Apache.
+    const storagePath = getFilePathOnStorage(attachment);
+    const relativePath = path.relative(crowi.publicDir, storagePath);
+    const internalPathRoot = lib.configManager.getConfig('crowi', 'fileUpload:local:internalRedirectPath');
+    const internalPath = urljoin(internalPathRoot, relativePath);
+    res.set('X-Accel-Redirect', internalPath);
+    res.set('X-Sendfile', storagePath);
+    return res.end();
   };
 
   return lib;
